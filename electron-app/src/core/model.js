@@ -51,7 +51,7 @@ const WING_INPUT_GROUPS = {
   [WingIoGroup.AES50_C]: { oscCode: 'A50C', label: 'AES50-C', count: 48 },
   [WingIoGroup.AESEBU]: { oscCode: 'AESEBU', label: 'AES/EBU', count: 2 },
   [WingIoGroup.STAGECONNECT]: { oscCode: 'ST', label: 'StageConnect', count: 32 },
-  [WingIoGroup.USB_AUDIO]: { oscCode: 'USBA', label: 'USB Audio (PC)', count: 2 },
+  [WingIoGroup.USB_AUDIO]: { oscCode: 'USBA', label: 'USB Audio (PC)', count: 48 },
   [WingIoGroup.USB_PLAYER]: { oscCode: 'USBP', label: 'USB Player', count: 4 },
 };
 
@@ -65,7 +65,7 @@ const WING_OUTPUT_GROUPS = {
   [WingIoGroup.AES50_C]: { oscCode: 'A50C', label: 'AES50-C', count: 48 },
   [WingIoGroup.AESEBU]: { oscCode: 'AESEBU', label: 'AES/EBU', count: 2 },
   [WingIoGroup.STAGECONNECT]: { oscCode: 'ST', label: 'StageConnect', count: 32 },
-  [WingIoGroup.USB_AUDIO]: { oscCode: 'USBA', label: 'USB Audio (PC)', count: 2 },
+  [WingIoGroup.USB_AUDIO]: { oscCode: 'USBA', label: 'USB Audio (PC)', count: 48 },
 };
 
 const WING_CAPACITY = {

@@ -253,8 +253,12 @@ function renderPlanTables() {
   `).join('') || '<tr><td colspan="3" class="empty-hint">Aucune entrée</td></tr>';
 
   const busRows = plan.busPlan.map((b) => `
-    <tr><td>${b.busType}</td><td>${b.busNumber}</td><td>${esc(b.name)}</td><td>${b.format}</td></tr>
-  `).join('') || '<tr><td colspan="4" class="empty-hint">Aucun bus</td></tr>';
+    <tr>
+      <td>${b.busType}</td><td>${b.busNumber}</td><td>${esc(b.name)}</td><td>${b.format}</td>
+      <td>${esc(b.sends.join(', ') || '—')}</td>
+      <td>${esc(b.talkbackNames.join(', ') || '—')}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="6" class="empty-hint">Aucun bus</td></tr>';
 
   return `
     <div style="display:flex; gap:20px;">
@@ -264,9 +268,9 @@ function renderPlanTables() {
           <tbody>${inputRows}</tbody>
         </table>
       </div>
-      <div style="flex:1;">
+      <div style="flex:2;">
         <table class="data">
-          <thead><tr><th>Type</th><th>N°</th><th>Nom</th><th>Format</th></tr></thead>
+          <thead><tr><th>Type</th><th>N°</th><th>Nom</th><th>Format</th><th>Mix (sends)</th><th>Talkback</th></tr></thead>
           <tbody>${busRows}</tbody>
         </table>
       </div>

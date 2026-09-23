@@ -27,7 +27,7 @@ function csv(value) {
 }
 
 function buildPatchCsvText(plan) {
-  const lines = ['Type;Numéro;Nom;Format/Slots;Source(s);Talkback;Patch physique'];
+  const lines = ['Type;Numéro;Nom;Format/Slots;Mix (sends réels);Talkback;Patch physique'];
 
   for (const input of plan.inputPlan) {
     const addressHint = input.firstSlot <= 40 ? `ch${input.firstSlot}` : `aux${input.firstSlot - 40}`;
@@ -42,7 +42,7 @@ function buildPatchCsvText(plan) {
       ? `${WING_OUTPUT_GROUPS[bus.physicalOutput.group].label} #${bus.physicalOutput.index}`
       : '(non patché)';
     lines.push(`${bus.busType};${bus.busNumber};${csv(bus.name)};${bus.format};` +
-      `${csv(bus.feedingSourceNames.join(', '))};${csv(bus.talkbackNames.join(', '))};${csv(outPatch)}`);
+      `${csv(bus.sends.join(', '))};${csv(bus.talkbackNames.join(', '))};${csv(outPatch)}`);
   }
 
   if (plan.errors.length > 0) {
