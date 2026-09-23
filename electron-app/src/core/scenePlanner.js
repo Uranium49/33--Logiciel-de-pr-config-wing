@@ -21,6 +21,7 @@ const CHANNEL_STYLE = {
   pcSource: { col: 14, icon: null },   // Bleu clair, pas d'icône dédiée confirmée
   engineer: { col: 7, icon: 100 },     // Jaune, micro générique
   automixRef: { col: 12, icon: null }, // Violet, piste technique
+  referenceMic: { col: 16, icon: 100 }, // Teal, micro générique
 };
 const BUS_COLOR_PALETTE = [2, 5, 7, 11, 13, 16, 4, 9, 15, 6]; // rotation de couleurs distinctes
 
@@ -120,6 +121,11 @@ function addInputMessages(messages, input) {
       messages.push({ address: IoInput.name(groupCode, sourceIndex), args: [s(label)] });
       if (style.col != null) messages.push({ address: IoInput.color(groupCode, sourceIndex), args: [i(style.col)] });
       if (style.icon != null) messages.push({ address: IoInput.icon(groupCode, sourceIndex), args: [i(style.icon)] });
+
+      // CONFIRMÉ : sans ce paramètre de mode explicite, une paire patchée sur 2 index consécutifs
+      // reste en MONO côté console. Émis pour chaque membre de la paire (les deux reçoivent la
+      // même valeur, comme observé).
+      messages.push({ address: IoInput.mode(groupCode, sourceIndex), args: [s(input.slotCount > 1 ? 'ST' : 'M')] });
     }
   }
 }
@@ -281,12 +287,20 @@ function buildClearAllMessages(capacity) {
     messages.push({ address: Channel.name(ch), args: [s('')] });
     messages.push({ address: Channel.color(ch), args: [i(DEFAULT_COLOR)] });
     messages.push({ address: Channel.icon(ch), args: [i(0)] });
+    // CONFIRMÉ : les channels ont aussi par défaut leur send vers Main 1 activé -- coupé pour tous
+    // les Main, pas seulement le 1er, par précaution symétrique avec ce qu'on fait pour les bus.
+    for (let m = 1; m <= capacity.mainBuses; m++) {
+      messages.push({ address: Channel.mainSendOn(ch, m), args: [i(0)] });
+    }
   }
   for (let aux = 1; aux <= capacity.auxChannels; aux++) {
     messages.push({ address: AuxInput.inputConnectionGroup(aux), args: [s('OFF')] });
     messages.push({ address: AuxInput.name(aux), args: [s('')] });
     messages.push({ address: AuxInput.color(aux), args: [i(DEFAULT_COLOR)] });
     messages.push({ address: AuxInput.icon(aux), args: [i(0)] });
+    for (let m = 1; m <= capacity.mainBuses; m++) {
+      messages.push({ address: AuxInput.mainSendOn(aux, m), args: [i(0)] });
+    }
   }
   for (let bus = 1; bus <= capacity.buses; bus++) {
     messages.push({ address: `${Bus.node(bus)}/out/conn/grp`, args: [s('OFF')] });

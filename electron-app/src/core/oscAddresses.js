@@ -87,6 +87,10 @@ const IoInput = {
   name: (groupCode, index) => `${IoInput.node(groupCode, index)}/name`,
   color: (groupCode, index) => `${IoInput.node(groupCode, index)}/col`,
   icon: (groupCode, index) => `${IoInput.node(groupCode, index)}/icon`,
+  // CONFIRMÉ par observation directe : /io/in/{grp}/{idx}/mode ("M" ou "ST") est le paramètre
+  // ÉCRIVABLE qui lie une paire de canaux en stéréo — sans lui, une source stéréo reste en mono même
+  // avec deux index consécutifs patchés. Les deux membres de la paire reçoivent la même valeur.
+  mode: (groupCode, index) => `${IoInput.node(groupCode, index)}/mode`,
 };
 
 // Sortie physique/réseau — EXPÉRIMENTAL, par symétrie avec IoInput (non observé/confirmé).

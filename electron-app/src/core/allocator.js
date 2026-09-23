@@ -113,15 +113,24 @@ function allocateInputs(config, capacity, result, automixByLangId) {
     ambianceCursor = placeInput(result, mic.name, mic.name, slots, ambianceCursor, mic.physicalInput, 'fieldMic');
   }
 
+  // Canal 40 réservé en dur pour le micro réel (patch fixe Local #24, position fixe) — demandé
+  // explicitement, en dehors de toute logique séquentielle. Rien d'autre ne doit atterrir dessus.
+  const REFERENCE_MIC_SLOT = 40;
+  placeInput(result, 'Mic Real', 'Mic Real', 1, REFERENCE_MIC_SLOT, createPhysicalRef(WingIoGroup.LOCAL, 24), 'referenceMic');
+
   let pcCursor = zones.pc.start;
   for (const pc of config.pcSources) {
     const slots = pc.format === ChannelFormat.STEREO ? 2 : 1;
+    // Le slot 40 est réservé : si la prochaine source PC le chevauche, elle saute directement après.
+    if (pcCursor <= REFERENCE_MIC_SLOT && pcCursor + slots - 1 >= REFERENCE_MIC_SLOT) {
+      pcCursor = REFERENCE_MIC_SLOT + 1;
+    }
     if (pcCursor + slots - 1 > zones.pc.end) {
       result.errors.push({
         resource: 'Zone PC',
         requested: pcCursor + slots - 1 - zones.pc.start + 1,
-        available: zones.pc.end - zones.pc.start + 1,
-        detail: `Trop de sources PC pour la zone PC (canaux ${zones.pc.start}-40 + aux 1-8) : ` +
+        available: zones.pc.end - zones.pc.start + 1 - 1, // -1 : canal 40 réservé au micro réel
+        detail: `Trop de sources PC pour la zone PC (canaux ${zones.pc.start}-40 + aux 1-8, canal 40 réservé) : ` +
           `"${pc.name}" n'a pas pu être placé.`,
       });
       continue;
