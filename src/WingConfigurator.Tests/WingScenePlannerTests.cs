@@ -15,8 +15,7 @@ public class WingScenePlannerTests
         lang.Commentators.Add(new CommentatorPosition
         {
             Name = "Comm1",
-            ReturnMode = ReturnMode.PersonalStereo,
-            TalkbackEnabled = true
+            ReturnMode = ReturnMode.PersonalStereo
         });
         config.Languages.Add(lang);
 
@@ -40,8 +39,8 @@ public class WingScenePlannerTests
         // depuis le canal de l'autre vers son propre bus de retour.
         var config = new ProductionConfig();
         var lang = new Language { Name = "FR" };
-        lang.Commentators.Add(new CommentatorPosition { Name = "A", ReturnMode = ReturnMode.PersonalMono, TalkbackEnabled = true });
-        lang.Commentators.Add(new CommentatorPosition { Name = "B", ReturnMode = ReturnMode.PersonalMono, TalkbackEnabled = true });
+        lang.Commentators.Add(new CommentatorPosition { Name = "A", ReturnMode = ReturnMode.PersonalMono });
+        lang.Commentators.Add(new CommentatorPosition { Name = "B", ReturnMode = ReturnMode.PersonalMono });
         config.Languages.Add(lang);
 
         var plan = new ResourceAllocator().Allocate(config);
@@ -57,5 +56,22 @@ public class WingScenePlannerTests
 
         // Pas de send de A vers son propre retour.
         Assert.DoesNotContain(messages, m => m.Address == "/ch/1/send/MX1/on");
+    }
+
+    [Fact]
+    public void BuildMessages_WithPhysicalInputPatched_EmitsConnectionGroupAndIndex()
+    {
+        var config = new ProductionConfig();
+        config.FieldMics.Add(new FieldMic
+        {
+            Name = "Ambiance",
+            PhysicalInput = new PhysicalInputRef { Group = WingInputGroup.Aes50A, Index = 5 }
+        });
+
+        var plan = new ResourceAllocator().Allocate(config);
+        var messages = WingScenePlanner.BuildMessages(plan);
+
+        Assert.Contains(messages, m => m.Address == "/ch/1/in/conn/grp" && (string)m.Arguments[0] == "A50A");
+        Assert.Contains(messages, m => m.Address == "/ch/1/in/conn/in" && (int)m.Arguments[0] == 5);
     }
 }

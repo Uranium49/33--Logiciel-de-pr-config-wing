@@ -9,7 +9,8 @@ public sealed record InputAssignment(
     int SlotCount,           // 1 (mono) ou 2 (stéréo)
     string DisplayName,      // nom affiché sur la scribble strip de la console (ex: "Comm1 (FR)")
     string PatchLabel,       // libellé complet pour la fiche de patch (avec ASIO/Dante)
-    PcConnectionType? ConnectionType); // null si ce n'est pas une source PC
+    PcConnectionType? ConnectionType, // null si ce n'est pas une source PC
+    PhysicalInputRef? PhysicalInput); // assignation physique choisie par l'utilisateur (écran de patch), null = pas encore patché
 
 /// <summary>Un bus (Main/Matrix/Bus) assigné à un rôle logique.</summary>
 public sealed record BusAssignment(

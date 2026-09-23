@@ -47,19 +47,20 @@ public sealed class ResourceAllocator
             foreach (var c in lang.Commentators)
             {
                 cursor = PlaceInput(result, c.Name, $"{c.Name} ({lang.Name})", slots: 1, cursor,
-                    connectionType: null);
+                    connectionType: null, c.PhysicalInput);
             }
         }
 
         foreach (var mic in config.FieldMics)
         {
-            cursor = PlaceInput(result, mic.Name, mic.Name, slots: 1, cursor, connectionType: null);
+            int slots = mic.Format == ChannelFormat.Stereo ? 2 : 1;
+            cursor = PlaceInput(result, mic.Name, mic.Name, slots, cursor, connectionType: null, mic.PhysicalInput);
         }
 
         foreach (var pc in config.PcSources)
         {
             int slots = pc.Format == ChannelFormat.Stereo ? 2 : 1;
-            cursor = PlaceInput(result, pc.Name, pc.Name, slots, cursor, pc.ConnectionType);
+            cursor = PlaceInput(result, pc.Name, pc.Name, slots, cursor, pc.ConnectionType, pc.PhysicalInput);
         }
 
         int totalRequested = cursor - 1;
@@ -75,13 +76,13 @@ public sealed class ResourceAllocator
     }
 
     private static int PlaceInput(AllocationResult result, string sourceName, string displayName, int slots,
-        int cursor, PcConnectionType? connectionType)
+        int cursor, PcConnectionType? connectionType, PhysicalInputRef? physicalInput)
     {
         string patchLabel = connectionType is null
             ? displayName
             : $"{displayName} [{(connectionType == PcConnectionType.Dante ? "Dante" : "ASIO local")}]";
 
-        result.InputPlan.Add(new InputAssignment(sourceName, cursor, slots, displayName, patchLabel, connectionType));
+        result.InputPlan.Add(new InputAssignment(sourceName, cursor, slots, displayName, patchLabel, connectionType, physicalInput));
         return cursor + slots;
     }
 
@@ -108,44 +109,42 @@ public sealed class ResourceAllocator
             AddRoomMixDemand(config, mainDemands);
         }
 
-        // Retours perso -> Matrix. Le talkback d'une personne est simplement tagué sur le bus qui la
-        // concerne (ici son retour perso) ; il n'y a rien de plus à allouer.
+        // Retours perso -> Matrix. Le talkback est TOUJOURS actif pour un commentateur (mesh Companion,
+        // voir WingScenePlanner) : perso -> talkback ciblé sur lui seul ; bus de langue partagé ->
+        // talkback commun à tout le groupe. Le talkback est simplement tagué sur le bus qui le concerne ;
+        // il n'y a rien de plus à allouer tant que ce bus existe déjà.
         var namesWithoutOwnReturnButWantTalkback = new List<string>();
 
         foreach (var lang in config.Languages)
         {
             foreach (var c in lang.Commentators)
             {
-                var tb = c.TalkbackEnabled ? new[] { c.Name } : Array.Empty<string>();
                 switch (c.ReturnMode)
                 {
                     case ReturnMode.PersonalMono:
                         matrixDemands.Add(new BusDemand(BusRole.CommentatorReturn, ChannelFormat.Mono,
-                            $"Ret {c.Name}", WingBusType.Matrix, new[] { c.Name }, tb));
+                            $"Ret {c.Name}", WingBusType.Matrix, new[] { c.Name }, new[] { c.Name }));
                         break;
                     case ReturnMode.PersonalStereo:
                         matrixDemands.Add(new BusDemand(BusRole.CommentatorReturn, ChannelFormat.Stereo,
-                            $"Ret {c.Name}", WingBusType.Matrix, new[] { c.Name }, tb));
+                            $"Ret {c.Name}", WingBusType.Matrix, new[] { c.Name }, new[] { c.Name }));
                         break;
                     case ReturnMode.SharedLanguageBus:
                         break; // le bus partagé est créé une fois par langue plus bas, avec ses talkbacks
                     case ReturnMode.None:
-                        if (c.TalkbackEnabled)
-                        {
-                            namesWithoutOwnReturnButWantTalkback.Add(c.Name);
-                        }
+                        namesWithoutOwnReturnButWantTalkback.Add(c.Name); // talkback obligatoire malgré tout
                         break;
                 }
             }
 
-            // Un seul bus partagé par langue si au moins un commentateur le demande.
+            // Un seul bus partagé par langue si au moins un commentateur le demande. Le talkback y est
+            // commun à tout le groupe (chaque membre reçoit le talkback des autres via CE bus partagé).
             var sharedMembers = lang.Commentators.Where(c => c.ReturnMode == ReturnMode.SharedLanguageBus).ToList();
             if (sharedMembers.Count > 0)
             {
                 var feeders = sharedMembers.Select(c => c.Name).ToList();
-                var tb = sharedMembers.Where(c => c.TalkbackEnabled).Select(c => c.Name).ToList();
                 busDirectDemands.Add(new BusDemand(BusRole.CommentatorReturn, ChannelFormat.Stereo,
-                    $"Ret {lang.Name}", WingBusType.Bus, feeders, tb));
+                    $"Ret {lang.Name}", WingBusType.Bus, feeders, feeders));
             }
         }
 

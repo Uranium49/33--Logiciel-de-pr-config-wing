@@ -21,6 +21,7 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private ObservableCollection<InputAssignment> _inputRows = new();
     [ObservableProperty] private ObservableCollection<BusAssignment> _busRows = new();
     [ObservableProperty] private ObservableCollection<CapacityError> _errorRows = new();
+    [ObservableProperty] private ObservableCollection<PatchRowViewModel> _patchRows = new();
 
     [ObservableProperty] private string _wingHost = "192.168.1.10";
     [ObservableProperty] private int _wingPort = WingOscClient.DefaultPort;
@@ -118,10 +119,41 @@ public partial class MainViewModel : ObservableObject
         ErrorRows = new ObservableCollection<CapacityError>(AllocationResult.Errors);
 
         _lastMessages = WingScenePlanner.BuildMessages(AllocationResult);
+        RebuildPatchRows();
 
         StatusMessage = AllocationResult.IsValid
             ? $"OK — {InputRows.Sum(i => i.SlotCount)} entrées, {BusRows.Count} bus utilisés."
             : $"{ErrorRows.Count} erreur(s) de capacité — voir l'onglet Récapitulatif.";
+    }
+
+    /// <summary>Reconstruit la liste des sources patchables (écran "Patch physique") en recoupant le
+    /// plan d'entrées calculé avec les objets modèle d'origine (par nom, identité stable).</summary>
+    private void RebuildPatchRows()
+    {
+        if (AllocationResult is null) return;
+
+        var slotBySourceName = AllocationResult.InputPlan.ToDictionary(i => i.SourceName, i => i);
+        var sources = new List<IHasPhysicalInput>();
+        sources.AddRange(Config.AllCommentators());
+        sources.AddRange(Config.FieldMics);
+        sources.AddRange(Config.PcSources);
+
+        var rows = new List<PatchRowViewModel>();
+        foreach (var source in sources)
+        {
+            if (!slotBySourceName.TryGetValue(source.Name, out var input)) continue;
+
+            // On garantit une instance non-nulle pour permettre le binding direct Group/Index en XAML.
+            source.PhysicalInput ??= new PhysicalInputRef();
+
+            string slotInfo = input.SlotCount > 1
+                ? $"Canaux {input.FirstSlot}-{input.FirstSlot + input.SlotCount - 1} (stéréo)"
+                : $"Canal {input.FirstSlot}";
+
+            rows.Add(new PatchRowViewModel(input.DisplayName, slotInfo, source));
+        }
+
+        PatchRows = new ObservableCollection<PatchRowViewModel>(rows);
     }
 
     // ---------- Réseau / export ----------
@@ -227,3 +259,6 @@ public partial class MainViewModel : ObservableObject
         Recalculate();
     }
 }
+
+/// <summary>Une carte de l'écran "Patch physique" : une source + où l'assigner sur la console.</summary>
+public sealed record PatchRowViewModel(string DisplayName, string SlotInfo, IHasPhysicalInput Source);

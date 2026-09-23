@@ -45,12 +45,21 @@ public static class WingScenePlanner
         for (int i = 0; i < input.SlotCount; i++)
         {
             int slot = input.FirstSlot + i;
-            string nameAddr = slot <= 40
-                ? WingOscAddresses.Channel.Name(slot)
-                : WingOscAddresses.AuxInput.Name(slot - 40);
+            bool isAux = slot > 40;
+            int channelOrAux = isAux ? slot - 40 : slot;
 
+            string nameAddr = isAux ? WingOscAddresses.AuxInput.Name(channelOrAux) : WingOscAddresses.Channel.Name(channelOrAux);
             string label = input.SlotCount > 1 ? $"{input.DisplayName} {(i == 0 ? "L" : "R")}" : input.DisplayName;
             messages.Add(new OscMessage(nameAddr, label));
+
+            // Patch physique choisi sur l'écran de patch (groupe + index, +i pour le 2e canal si stéréo).
+            if (input.PhysicalInput is { } patch)
+            {
+                string grpAddr = isAux ? WingOscAddresses.AuxInput.InputConnectionGroup(channelOrAux) : WingOscAddresses.Channel.InputConnectionGroup(channelOrAux);
+                string idxAddr = isAux ? WingOscAddresses.AuxInput.InputConnectionIndex(channelOrAux) : WingOscAddresses.Channel.InputConnectionIndex(channelOrAux);
+                messages.Add(new OscMessage(grpAddr, WingInputGroups.OscCode[patch.Group]));
+                messages.Add(new OscMessage(idxAddr, patch.Index + i));
+            }
         }
     }
 

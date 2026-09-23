@@ -70,7 +70,7 @@ public class ResourceAllocatorTests
         var lang = new Language { Name = "FR" };
         for (int i = 0; i < 50; i++)
         {
-            lang.Commentators.Add(new CommentatorPosition { Name = $"Comm{i}", ReturnMode = ReturnMode.None, TalkbackEnabled = false });
+            lang.Commentators.Add(new CommentatorPosition { Name = $"Comm{i}", ReturnMode = ReturnMode.None });
         }
         config.Languages.Add(lang);
 
@@ -91,8 +91,7 @@ public class ResourceAllocatorTests
             lang.Commentators.Add(new CommentatorPosition
             {
                 Name = $"Comm{i}",
-                ReturnMode = ReturnMode.PersonalStereo,
-                TalkbackEnabled = false
+                ReturnMode = ReturnMode.PersonalStereo
             });
         }
         config.Languages.Add(lang);
@@ -108,13 +107,30 @@ public class ResourceAllocatorTests
     }
 
     [Fact]
+    public void FieldMic_StereoFormat_ConsumesTwoInputSlots()
+    {
+        var config = new ProductionConfig();
+        config.FieldMics.Add(new FieldMic { Name = "Ambiance stéréo", Format = ChannelFormat.Stereo });
+        config.FieldMics.Add(new FieldMic { Name = "Interview mono", Format = ChannelFormat.Mono });
+
+        var result = new ResourceAllocator().Allocate(config);
+
+        var stereo = result.InputPlan.Single(i => i.SourceName == "Ambiance stéréo");
+        var mono = result.InputPlan.Single(i => i.SourceName == "Interview mono");
+
+        Assert.Equal(2, stereo.SlotCount);
+        Assert.Equal(1, mono.SlotCount);
+        Assert.Equal(stereo.FirstSlot + 2, mono.FirstSlot);
+    }
+
+    [Fact]
     public void SharedLanguageBus_CreatesOneBusPerLanguage_NotOnePerCommentator()
     {
         var config = new ProductionConfig();
         var lang = new Language { Name = "FR" };
-        lang.Commentators.Add(new CommentatorPosition { Name = "A", ReturnMode = ReturnMode.SharedLanguageBus, TalkbackEnabled = false });
-        lang.Commentators.Add(new CommentatorPosition { Name = "B", ReturnMode = ReturnMode.SharedLanguageBus, TalkbackEnabled = false });
-        lang.Commentators.Add(new CommentatorPosition { Name = "C", ReturnMode = ReturnMode.SharedLanguageBus, TalkbackEnabled = false });
+        lang.Commentators.Add(new CommentatorPosition { Name = "A", ReturnMode = ReturnMode.SharedLanguageBus });
+        lang.Commentators.Add(new CommentatorPosition { Name = "B", ReturnMode = ReturnMode.SharedLanguageBus });
+        lang.Commentators.Add(new CommentatorPosition { Name = "C", ReturnMode = ReturnMode.SharedLanguageBus });
         config.Languages.Add(lang);
 
         var result = new ResourceAllocator().Allocate(config);

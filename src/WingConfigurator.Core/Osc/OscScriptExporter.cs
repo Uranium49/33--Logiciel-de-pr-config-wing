@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using WingConfigurator.Core.Allocation;
+using WingConfigurator.Core.Model;
 
 namespace WingConfigurator.Core.Osc;
 
@@ -43,27 +44,30 @@ public static class OscScriptExporter
     public static void WritePatchSheetCsv(AllocationResult plan, string filePath)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("Type;Numéro;Nom;Format/Slots;Source(s);Talkback");
+        sb.AppendLine("Type;Numéro;Nom;Format/Slots;Source(s);Talkback;Patch physique");
 
         foreach (var input in plan.InputPlan)
         {
             string addressHint = input.FirstSlot <= 40 ? $"ch{input.FirstSlot}" : $"aux{input.FirstSlot - 40}";
-            sb.AppendLine($"Entrée;{addressHint};{Csv(input.PatchLabel)};{input.SlotCount} slot(s);;");
+            string patch = input.PhysicalInput is { } p
+                ? $"{WingInputGroups.DisplayName[p.Group]} #{p.Index}"
+                : "(non patché)";
+            sb.AppendLine($"Entrée;{addressHint};{Csv(input.PatchLabel)};{input.SlotCount} slot(s);;;{Csv(patch)}");
         }
 
         foreach (var bus in plan.BusPlan)
         {
             sb.AppendLine($"{bus.BusType};{bus.BusNumber};{Csv(bus.Name)};{bus.Format};" +
-                          $"{Csv(string.Join(", ", bus.FeedingSourceNames))};{Csv(string.Join(", ", bus.TalkbackNames))}");
+                          $"{Csv(string.Join(", ", bus.FeedingSourceNames))};{Csv(string.Join(", ", bus.TalkbackNames))};");
         }
 
         if (plan.Errors.Count > 0)
         {
             sb.AppendLine();
-            sb.AppendLine("ERREURS DE CAPACITÉ;;;;;");
+            sb.AppendLine("ERREURS DE CAPACITÉ;;;;;;");
             foreach (var e in plan.Errors)
             {
-                sb.AppendLine($"{Csv(e.Resource)};{e.Requested};{e.Available};{Csv(e.Detail)};;");
+                sb.AppendLine($"{Csv(e.Resource)};{e.Requested};{e.Available};{Csv(e.Detail)};;;");
             }
         }
 
