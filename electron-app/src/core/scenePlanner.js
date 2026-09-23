@@ -26,6 +26,14 @@ function colorForBusName(name) {
   return BUS_COLOR_PALETTE[hash % BUS_COLOR_PALETTE.length];
 }
 
+// Les scribble-strips de la famille X32/Wing tronquent/rejettent silencieusement les noms trop
+// longs (limite historique ~12 car.). On tronque proactivement pour éviter un nom qui ne "prend"
+// pas du tout plutôt que d'être juste raccourci.
+const MAX_NAME_LENGTH = 12;
+function truncateName(name) {
+  return name.length > MAX_NAME_LENGTH ? name.slice(0, MAX_NAME_LENGTH) : name;
+}
+
 function buildMessages(plan) {
   const messages = [];
   const inputBySourceName = new Map(plan.inputPlan.map((row) => [row.sourceName, row]));
@@ -49,44 +57,45 @@ function addInputMessages(messages, input) {
     const chOrAux = isAux ? slot - 40 : slot;
     const addr = isAux ? AuxInput : Channel;
 
-    const label = input.slotCount > 1 ? `${input.displayName} ${n === 0 ? 'L' : 'R'}` : input.displayName;
-    messages.push({ address: addr.name(chOrAux), args: [s(label)] });
-
-    if (style.col != null) messages.push({ address: addr.color(chOrAux), args: [i(style.col)] });
-    if (style.icon != null) messages.push({ address: addr.icon(chOrAux), args: [i(style.icon)] });
-
+    // Patcher l'entrée AVANT de nommer/colorer : certaines consoles réappliquent un nom "auto"
+    // basé sur la source dès qu'on change le patch, ce qui écraserait un nom envoyé avant.
     if (input.physicalInput) {
       messages.push({ address: addr.inputConnectionGroup(chOrAux), args: [s(WING_INPUT_GROUPS[input.physicalInput.group].oscCode)] });
       messages.push({ address: addr.inputConnectionIndex(chOrAux), args: [i(input.physicalInput.index + n)] });
     }
+
+    // Utilise sourceName (identité courte, ex. "FR-Comm1") plutôt que displayName (ex. "FR-Comm1
+    // (FR)", réservé à l'UI) pour éviter une troncature disgracieuse sur la scribble strip.
+    const label = truncateName(input.slotCount > 1 ? `${input.sourceName} ${n === 0 ? 'L' : 'R'}` : input.sourceName);
+    messages.push({ address: addr.name(chOrAux), args: [s(label)] });
+
+    if (style.col != null) messages.push({ address: addr.color(chOrAux), args: [i(style.col)] });
+    if (style.icon != null) messages.push({ address: addr.icon(chOrAux), args: [i(style.icon)] });
   }
 }
 
 function addBusMessages(messages, bus) {
-  let nameAddr, colorAddr, monoAddr;
+  let nameAddr, colorAddr, monoAddr, nodeAddr;
   switch (bus.busType) {
-    case WingBusType.MAIN: nameAddr = Main.name(bus.busNumber); colorAddr = Main.color(bus.busNumber); monoAddr = Main.monoSwitch(bus.busNumber); break;
-    case WingBusType.MATRIX: nameAddr = Matrix.name(bus.busNumber); colorAddr = Matrix.color(bus.busNumber); monoAddr = Matrix.monoSwitch(bus.busNumber); break;
-    case WingBusType.BUS: nameAddr = Bus.name(bus.busNumber); colorAddr = Bus.color(bus.busNumber); monoAddr = Bus.monoSwitch(bus.busNumber); break;
+    case WingBusType.MAIN: nodeAddr = Main.node(bus.busNumber); nameAddr = Main.name(bus.busNumber); colorAddr = Main.color(bus.busNumber); monoAddr = Main.monoSwitch(bus.busNumber); break;
+    case WingBusType.MATRIX: nodeAddr = Matrix.node(bus.busNumber); nameAddr = Matrix.name(bus.busNumber); colorAddr = Matrix.color(bus.busNumber); monoAddr = Matrix.monoSwitch(bus.busNumber); break;
+    case WingBusType.BUS: nodeAddr = Bus.node(bus.busNumber); nameAddr = Bus.name(bus.busNumber); colorAddr = Bus.color(bus.busNumber); monoAddr = Bus.monoSwitch(bus.busNumber); break;
     default: throw new Error(`Type de bus inconnu: ${bus.busType}`);
   }
 
-  messages.push({ address: nameAddr, args: [s(bus.name)] });
-  messages.push({ address: colorAddr, args: [i(colorForBusName(bus.name))] });
-  messages.push({ address: monoAddr, args: [i(bus.format === ChannelFormat.MONO ? 1 : 0)] });
-
-  // Patch de sortie (écran "Patch physique", section Sorties). EXPÉRIMENTAL : contrairement au
-  // patch d'entrée (/ch/N/in/conn/...), aucune source publique (ni doc officielle, ni module
-  // Companion open-source) ne documente l'adresse de routage d'un bus/matrix/main vers un port de
-  // sortie physique. L'adresse ci-dessous est une supposition par symétrie avec l'entrée — à
-  // vérifier/corriger en priorité une fois connecté à la console réelle.
+  // Patch de sortie AVANT le nommage (même raisonnement que pour les entrées, voir addInputMessages).
+  // EXPÉRIMENTAL : contrairement au patch d'entrée (/ch/N/in/conn/...), aucune source publique (ni
+  // doc officielle, ni module Companion open-source) ne documente l'adresse de routage d'un
+  // bus/matrix/main vers un port de sortie physique. L'adresse ci-dessous est une supposition par
+  // symétrie avec l'entrée — à vérifier/corriger en priorité une fois connecté à la console réelle.
   if (bus.physicalOutput) {
-    const nodeAddr = bus.busType === WingBusType.MAIN ? Main.node(bus.busNumber)
-      : bus.busType === WingBusType.MATRIX ? Matrix.node(bus.busNumber)
-      : Bus.node(bus.busNumber);
     messages.push({ address: `${nodeAddr}/out/conn/grp`, args: [s(WING_OUTPUT_GROUPS[bus.physicalOutput.group].oscCode)] });
     messages.push({ address: `${nodeAddr}/out/conn/in`, args: [i(bus.physicalOutput.index)] });
   }
+
+  messages.push({ address: nameAddr, args: [s(truncateName(bus.name))] });
+  messages.push({ address: colorAddr, args: [i(colorForBusName(bus.name))] });
+  messages.push({ address: monoAddr, args: [i(bus.format === ChannelFormat.MONO ? 1 : 0)] });
 }
 
 /** Envoie réellement le contenu du mix (bus.sends, calculé par l'allocateur : PGM, mix salle,

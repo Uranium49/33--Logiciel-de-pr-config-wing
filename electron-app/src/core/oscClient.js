@@ -14,7 +14,7 @@ function openPort(host, port) {
   });
 }
 
-function sendAllMessages(host, port, messages, delayMsBetweenMessages = 5) {
+function sendAllMessages(host, port, messages, delayMsBetweenMessages = 20) {
   return new Promise((resolve, reject) => {
     const udpPort = openPort(host, port || DEFAULT_PORT);
     udpPort.on('error', reject);
