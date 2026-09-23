@@ -74,10 +74,13 @@ const WING_OUTPUT_GROUPS = {
 };
 
 const WING_CAPACITY = {
-  inputSlots: 48,  // 40 canaux /ch + 8 entrées /aux
-  mainBuses: 4,    // /main/1-4
-  matrixBuses: 8,  // /mtx/1-8
-  buses: 16,       // /bus/1-16
+  inputSlots: 48,   // 40 canaux /ch + 8 entrées /aux
+  mainChannels: 40, // /ch/1-40
+  auxChannels: 8,   // /aux/1-8
+  mainBuses: 4,     // /main/1-4
+  matrixBuses: 8,   // /mtx/1-8
+  buses: 16,        // /bus/1-16
+  automixGroups: 2, // gain-sharing sur max 16 canaux chacun (doc officielle Wing)
 };
 
 let idCounter = 1;

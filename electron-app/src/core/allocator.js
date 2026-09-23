@@ -20,19 +20,45 @@ const { ReturnMode, ChannelFormat, WingBusType, BusRole, WING_CAPACITY } = requi
 
 function allocate(config, capacity = WING_CAPACITY) {
   const result = { inputPlan: [], busPlan: [], errors: [] };
-  allocateInputs(config, capacity, result);
+  const automixByLangId = computeAutomixAssignments(config, capacity, result);
+  allocateInputs(config, capacity, result, automixByLangId);
   allocateBuses(config, capacity, result);
   return result;
 }
 
+/** La Wing n'a que 2 groupes d'automix (gain-sharing) au total, doc officielle : "2 groups of gain
+ * sharing on any 16 input channels". On donne un groupe dédié à chaque langue ayant 2+ commentateurs
+ * (l'automix n'a de sens qu'avec plusieurs micros simultanés) — dans l'ordre, jusqu'à épuisement des
+ * 2 groupes disponibles ; au-delà, erreur informative (les langues suivantes n'en profitent pas). */
+function computeAutomixAssignments(config, capacity, result) {
+  const qualifying = config.languages.filter((l) => l.commentators.length >= 2);
+  const map = new Map();
+  qualifying.slice(0, capacity.automixGroups).forEach((lang, idx) => map.set(lang.id, idx + 1));
+
+  if (qualifying.length > capacity.automixGroups) {
+    const left = qualifying.slice(0, capacity.automixGroups).map((l) => l.name).join(', ');
+    const missed = qualifying.slice(capacity.automixGroups).map((l) => l.name).join(', ');
+    result.errors.push({
+      resource: 'Automix',
+      requested: qualifying.length,
+      available: capacity.automixGroups,
+      detail: `${qualifying.length} langues ont 2+ commentateurs mais la Wing n'a que ${capacity.automixGroups} groupes d'automix. ` +
+        `Automix appliqué à : ${left}. Pas d'automix pour : ${missed}.`,
+    });
+  }
+
+  return map;
+}
+
 // ---------- Entrées ----------
 
-function allocateInputs(config, capacity, result) {
+function allocateInputs(config, capacity, result, automixByLangId) {
   let cursor = 1; // prochain slot libre (1-based)
 
   for (const lang of config.languages) {
+    const automixGroup = automixByLangId.get(lang.id) || null;
     for (const c of lang.commentators) {
-      cursor = placeInput(result, c.name, `${c.name} (${lang.name})`, 1, cursor, c.physicalInput, 'commentator');
+      cursor = placeInput(result, c.name, `${c.name} (${lang.name})`, 1, cursor, c.physicalInput, 'commentator', automixGroup);
     }
   }
 
@@ -63,10 +89,10 @@ function allocateInputs(config, capacity, result) {
   }
 }
 
-function placeInput(result, sourceName, displayName, slots, cursor, physicalInput, kind) {
+function placeInput(result, sourceName, displayName, slots, cursor, physicalInput, kind, automixGroup = null) {
   result.inputPlan.push({
     sourceName, firstSlot: cursor, slotCount: slots, displayName, patchLabel: displayName,
-    physicalInput: physicalInput || null, kind,
+    physicalInput: physicalInput || null, kind, automixGroup,
   });
   return cursor + slots;
 }

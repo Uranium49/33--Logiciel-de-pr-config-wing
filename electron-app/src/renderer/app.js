@@ -6,7 +6,7 @@ const { ipcRenderer } = require('electron');
 
 const M = require('../core/model');
 const { allocate } = require('../core/allocator');
-const { buildMessages } = require('../core/scenePlanner');
+const { buildMessages, buildClearAllMessages } = require('../core/scenePlanner');
 const { buildOscScriptText, buildPatchCsvText } = require('../core/exporter');
 const { describeBusMix } = require('../core/describe');
 const oscClient = require('../core/oscClient');
@@ -676,6 +676,25 @@ const actions = {
       setStatus(`${count} messages OSC envoyés à ${state.wingHost}:${state.wingPort}.`);
     } catch (err) {
       setStatus(`Erreur d'envoi : ${err.message}`);
+    }
+  },
+  'clear-wing': async () => {
+    const ok = confirm(
+      `Vider TOUS les channels (1-${M.WING_CAPACITY.mainChannels}), aux (1-${M.WING_CAPACITY.auxChannels}), ` +
+      `bus (1-${M.WING_CAPACITY.buses}), matrix (1-${M.WING_CAPACITY.matrixBuses}) et main (1-${M.WING_CAPACITY.mainBuses}) ` +
+      `de ${state.wingHost}:${state.wingPort} ?\n\n` +
+      `Efface noms, couleurs, icônes et débranche tous les patchs d'entrée/sortie — sur TOUTE la ` +
+      `console, pas seulement ce qui est utilisé par le projet actuel.\n\nCette action est IRRÉVERSIBLE.`
+    );
+    if (!ok) return;
+
+    setStatus('Vidage de la console en cours…');
+    try {
+      const messages = buildClearAllMessages(M.WING_CAPACITY);
+      const count = await oscClient.sendAllMessages(state.wingHost, state.wingPort, messages);
+      setStatus(`${count} messages envoyés pour vider la console.`);
+    } catch (err) {
+      setStatus(`Erreur : ${err.message}`);
     }
   },
 };

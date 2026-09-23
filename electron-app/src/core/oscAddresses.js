@@ -10,6 +10,10 @@ const Channel = {
   fader: (ch) => `${Channel.node(ch)}/fdr`,
   inputConnectionGroup: (ch) => `${Channel.node(ch)}/in/conn/grp`,
   inputConnectionIndex: (ch) => `${Channel.node(ch)}/in/conn/in`,
+  // EXPÉRIMENTAL : aucune source publique (PDF officiel, module Companion) ne documente le paramètre
+  // d'assignation à un groupe d'automix — la doc officielle confirme juste l'existence de la
+  // fonctionnalité ("2 groupes de gain-sharing sur 16 canaux max chacun"), pas son adresse OSC.
+  autoMixGroup: (ch) => `${Channel.node(ch)}/autogrp`,
   mainSendOn: (ch, main) => `${Channel.node(ch)}/main/${main}/on`,
   mainSendLevel: (ch, main) => `${Channel.node(ch)}/main/${main}/lvl`,
   sendOn: (ch, bus) => `${Channel.node(ch)}/send/${bus}/on`,

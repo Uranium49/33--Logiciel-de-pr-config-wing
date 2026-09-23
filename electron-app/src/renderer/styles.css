@@ -168,6 +168,8 @@ button {
 .btn.primary:hover { background: var(--accent-hover); }
 .btn.danger { background: transparent; border-color: transparent; color: var(--danger); padding: 5px 8px; font-weight: 500; }
 .btn.danger:hover { background: var(--danger-soft); }
+.btn.danger-outline { border-color: var(--danger); color: var(--danger); width: 100%; }
+.btn.danger-outline:hover { background: var(--danger-soft); }
 .btn.ghost { background: transparent; border-color: var(--border-soft); }
 .btn.small { padding: 4px 9px; font-size: 11.5px; }
 .btn:disabled { opacity: 0.45; cursor: default; }

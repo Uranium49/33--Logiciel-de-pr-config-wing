@@ -78,6 +78,12 @@ function addInputMessages(messages, input) {
     if (style.col != null) messages.push({ address: addr.color(chOrAux), args: [i(style.col)] });
     if (style.icon != null) messages.push({ address: addr.icon(chOrAux), args: [i(style.icon)] });
 
+    // Automix : les 2 casteurs d'une même langue partagent un groupe de gain-sharing (EXPÉRIMENTAL,
+    // adresse non confirmée — voir oscAddresses.js). Uniquement sur les 40 canaux principaux.
+    if (input.automixGroup && !isAux) {
+      messages.push({ address: Channel.autoMixGroup(chOrAux), args: [i(input.automixGroup)] });
+    }
+
     // Nomme/colore AUSSI la source physique elle-même (pas seulement le channel) — CONFIRMÉ par
     // observation directe sur une Wing réelle : /io/in/LCL/8/col et /io/in/LCL/8/icon s'affichent
     // en écho quand le channel patché sur ce port est modifié. /name suit la même logique par
@@ -224,4 +230,44 @@ function resolveChannelSendAddresses(slot, destination) {
   }
 }
 
-module.exports = { buildMessages };
+/** Remet à zéro TOUS les channels/aux/bus/matrix/main de la console (nom vide, couleur/icône par
+ * défaut, patch d'entrée/sortie débranché "OFF" — valeur confirmée par observation directe : la
+ * console affiche "OFF" sur /ch/N/in/conn/grp quand rien n'est patché). Balaye la totalité de la
+ * plage matérielle (WING_CAPACITY), pas seulement ce qui est utilisé par la config actuelle —
+ * pensé pour effacer les traces d'une précédente production avant d'en charger une nouvelle. */
+function buildClearAllMessages(capacity) {
+  const messages = [];
+  const DEFAULT_COLOR = 1;
+
+  for (let ch = 1; ch <= capacity.mainChannels; ch++) {
+    messages.push({ address: Channel.inputConnectionGroup(ch), args: [s('OFF')] });
+    messages.push({ address: Channel.name(ch), args: [s('')] });
+    messages.push({ address: Channel.color(ch), args: [i(DEFAULT_COLOR)] });
+    messages.push({ address: Channel.icon(ch), args: [i(0)] });
+  }
+  for (let aux = 1; aux <= capacity.auxChannels; aux++) {
+    messages.push({ address: AuxInput.inputConnectionGroup(aux), args: [s('OFF')] });
+    messages.push({ address: AuxInput.name(aux), args: [s('')] });
+    messages.push({ address: AuxInput.color(aux), args: [i(DEFAULT_COLOR)] });
+    messages.push({ address: AuxInput.icon(aux), args: [i(0)] });
+  }
+  for (let bus = 1; bus <= capacity.buses; bus++) {
+    messages.push({ address: `${Bus.node(bus)}/out/conn/grp`, args: [s('OFF')] });
+    messages.push({ address: Bus.name(bus), args: [s('')] });
+    messages.push({ address: Bus.color(bus), args: [i(DEFAULT_COLOR)] });
+  }
+  for (let mtx = 1; mtx <= capacity.matrixBuses; mtx++) {
+    messages.push({ address: `${Matrix.node(mtx)}/out/conn/grp`, args: [s('OFF')] });
+    messages.push({ address: Matrix.name(mtx), args: [s('')] });
+    messages.push({ address: Matrix.color(mtx), args: [i(DEFAULT_COLOR)] });
+  }
+  for (let main = 1; main <= capacity.mainBuses; main++) {
+    messages.push({ address: `${Main.node(main)}/out/conn/grp`, args: [s('OFF')] });
+    messages.push({ address: Main.name(main), args: [s('')] });
+    messages.push({ address: Main.color(main), args: [i(DEFAULT_COLOR)] });
+  }
+
+  return messages;
+}
+
+module.exports = { buildMessages, buildClearAllMessages };
