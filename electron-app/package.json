@@ -5,7 +5,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win"
+    "dist": "electron-packager . \"Wing Configurator\" --platform=win32 --arch=x64 --out=dist --overwrite"
   },
   "author": "",
   "license": "UNLICENSED",
@@ -14,18 +14,6 @@
   },
   "devDependencies": {
     "electron": "^32.0.0",
-    "electron-builder": "^25.0.0"
-  },
-  "build": {
-    "appId": "com.wingconfigurator.app",
-    "productName": "Wing Configurator",
-    "win": {
-      "target": "portable"
-    },
-    "files": [
-      "main.js",
-      "preload.js",
-      "src/**/*"
-    ]
+    "electron-packager": "^17.1.2"
   }
 }
