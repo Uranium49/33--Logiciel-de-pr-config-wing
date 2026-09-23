@@ -17,6 +17,7 @@ const CHANNEL_STYLE = {
   commentator: { col: 5, icon: 107 },  // Vert, casque/micro headset
   fieldMic: { col: 9, icon: 100 },     // Rouge, micro générique
   pcSource: { col: 14, icon: null },   // Bleu clair, pas d'icône dédiée confirmée
+  engineer: { col: 7, icon: 100 },     // Jaune, micro générique
 };
 const BUS_COLOR_PALETTE = [2, 5, 7, 11, 13, 16, 4, 9, 15, 6]; // rotation de couleurs distinctes
 
@@ -129,12 +130,13 @@ function addProgramSends(messages, bus, inputBySourceName) {
 }
 
 /** Agrège, pour un bus de retour, deux flux au niveau BUS (pas canal) :
- *   - mainRef : le Main PGM (ou le mix salle) déjà rempli — toujours actif.
+ *   - mainRef (ou mainRefs, pluriel pour l'ingé son qui écoute TOUS les PGM+salle à la fois) : déjà
+ *     rempli — toujours actif.
  *   - le bus talkback dédié à ce retour (même owner, role TALKBACK) — toujours actif ; c'est CE bus
  *     qui reçoit le mesh privé un-à-un (voir addTalkbackMeshMessages), pas la matrix directement. */
 function addAggregationSends(messages, bus, plan) {
-  if (bus.mainRef) {
-    const source = findBusByOwner(plan, bus.mainRef);
+  for (const ref of bus.mainRef ? [bus.mainRef] : bus.mainRefs || []) {
+    const source = findBusByOwner(plan, ref);
     const addrs = source && resolveInterBusSendAddresses(source, bus);
     if (addrs) {
       messages.push({ address: addrs.onAddr, args: [i(1)] });
@@ -142,7 +144,7 @@ function addAggregationSends(messages, bus, plan) {
     }
   }
 
-  if (bus.role === BusRole.COMMENTATOR_RETURN || bus.role === BusRole.FIELD_MIC_RETURN) {
+  if (bus.role === BusRole.COMMENTATOR_RETURN || bus.role === BusRole.FIELD_MIC_RETURN || bus.role === BusRole.ENGINEER_MONITOR) {
     const talkBus = plan.busPlan.find((b) => b.role === BusRole.TALKBACK && sameOwner(b.owner, bus.owner));
     const addrs = talkBus && resolveInterBusSendAddresses(talkBus, bus);
     if (addrs) {

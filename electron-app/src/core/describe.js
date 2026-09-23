@@ -16,12 +16,12 @@ function describeBusMix(bus, plan) {
     parts.push(bus.sends.join(', '));
   }
 
-  if (bus.mainRef) {
-    const source = plan.busPlan.find((b) => sameOwner(b.owner, bus.mainRef));
+  for (const ref of bus.mainRef ? [bus.mainRef] : bus.mainRefs || []) {
+    const source = plan.busPlan.find((b) => sameOwner(b.owner, ref));
     if (source) parts.push(source.name);
   }
 
-  if (bus.role === BusRole.COMMENTATOR_RETURN || bus.role === BusRole.FIELD_MIC_RETURN) {
+  if (bus.role === BusRole.COMMENTATOR_RETURN || bus.role === BusRole.FIELD_MIC_RETURN || bus.role === BusRole.ENGINEER_MONITOR) {
     const talkBus = plan.busPlan.find((b) => b.role === BusRole.TALKBACK && sameOwner(b.owner, bus.owner));
     if (talkBus) parts.push(`${talkBus.name} (talkback)`);
   }

@@ -56,6 +56,7 @@ function findEntity(entityType, id) {
       return null;
     case 'mic': return state.config.fieldMics.find((x) => x.id === id) || null;
     case 'pc': return state.config.pcSources.find((x) => x.id === id) || null;
+    case 'engineer': return state.config.soundEngineer;
     default: return null;
   }
 }
@@ -122,6 +123,11 @@ function renderConfigScreen() {
     <section class="card">
       <h2>Sources PC</h2>
       ${renderPcSourcesSection()}
+    </section>
+
+    <section class="card">
+      <h2>Ingé son <span class="hint">retour Matrix qui écoute tous les mix + talkback + son propre micro</span></h2>
+      ${renderSoundEngineerSection()}
     </section>
 
     <section class="card">
@@ -234,6 +240,24 @@ function renderPcSourcesSection() {
     </table>
     <button class="btn small add-row-btn" data-action="add-pc">+ Source PC</button>
     <p class="empty-hint" style="margin-top:8px;">Le mode de connexion (Dante, AES50…) se choisit sur l'écran « Patch physique », comme pour n'importe quelle source.</p>
+  `;
+}
+
+function renderSoundEngineerSection() {
+  const cfg = state.config;
+  const enabled = cfg.soundEngineerEnabled;
+
+  return `
+    <label class="checkbox-row" style="margin-bottom:10px;">
+      <input type="checkbox" data-entity="config" data-field="soundEngineerEnabled" ${enabled ? 'checked' : ''} />
+      Ajouter un poste ingé son
+    </label>
+    ${enabled ? `
+      <div style="max-width:260px;">
+        <label class="field-label">Nom</label>
+        <input type="text" data-entity="engineer" data-id="${cfg.soundEngineer.id}" data-field="name" value="${esc(cfg.soundEngineer.name)}" />
+      </div>
+    ` : '<p class="empty-hint">Pas de poste ingé son dans cette production.</p>'}
   `;
 }
 
@@ -393,6 +417,7 @@ function getInputPatchItems() {
   for (const lang of state.config.languages) for (const c of lang.commentators) push(c);
   for (const mic of state.config.fieldMics) push(mic);
   for (const pc of state.config.pcSources) push(pc);
+  if (state.config.soundEngineerEnabled) push(state.config.soundEngineer);
   return items;
 }
 
@@ -434,6 +459,9 @@ function setOwnerOutput(owner, ref) {
       if (mic) mic.returnOutput = ref;
       break;
     }
+    case 'soundEngineer':
+      state.config.soundEngineer.returnOutput = ref;
+      break;
   }
 }
 

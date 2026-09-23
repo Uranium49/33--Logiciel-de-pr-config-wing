@@ -19,6 +19,7 @@ const BusRole = {
   ROOM_MIX: 'roomMix',
   COMMENTATOR_RETURN: 'commentatorReturn',
   FIELD_MIC_RETURN: 'fieldMicReturn',
+  ENGINEER_MONITOR: 'engineerMonitor',
   TALKBACK: 'talkback',
 };
 
@@ -126,6 +127,16 @@ function createPcSource(name) {
   };
 }
 
+/** Poste ingé son : écoute TOUS les mix (PGM de chaque langue + salle) sur une Matrix dédiée, et
+ * participe au mesh talkback comme n'importe quel commentateur (son propre bus + son propre micro). */
+function createSoundEngineer(name = 'Ingé son') {
+  return {
+    id: nextId(), name,
+    physicalInput: null,  // son micro
+    returnOutput: null,   // sortie de sa Matrix de retour (tous les mix)
+  };
+}
+
 function createProductionConfig() {
   return {
     typologyName: 'Nouvelle production',
@@ -135,6 +146,8 @@ function createProductionConfig() {
     roomMixEnabled: false,
     recordingMultitrackEnabled: false,
     roomMixOutput: null,
+    soundEngineerEnabled: true,
+    soundEngineer: createSoundEngineer(),
   };
 }
 
@@ -168,5 +181,5 @@ module.exports = {
   ReturnMode, ChannelFormat, PcSourceCategory, WingBusType, BusRole, WingIoGroup,
   WING_INPUT_GROUPS, WING_OUTPUT_GROUPS, WING_CAPACITY,
   createPhysicalRef, createCommentator, createLanguage, createFieldMic, createPcSource,
-  createProductionConfig, sportMultiLanguageTemplate, allCommentators,
+  createSoundEngineer, createProductionConfig, sportMultiLanguageTemplate, allCommentators,
 };

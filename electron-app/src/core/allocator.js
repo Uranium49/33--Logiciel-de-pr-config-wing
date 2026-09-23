@@ -41,6 +41,11 @@ function allocateInputs(config, capacity, result) {
     cursor = placeInput(result, mic.name, mic.name, slots, cursor, mic.physicalInput, 'fieldMic');
   }
 
+  if (config.soundEngineerEnabled) {
+    const eng = config.soundEngineer;
+    cursor = placeInput(result, eng.name, eng.name, 1, cursor, eng.physicalInput, 'engineer');
+  }
+
   for (const pc of config.pcSources) {
     const slots = pc.format === ChannelFormat.STEREO ? 2 : 1;
     cursor = placeInput(result, pc.name, pc.name, slots, cursor, pc.physicalInput, 'pcSource');
@@ -145,6 +150,19 @@ function allocateBuses(config, capacity, result) {
     }
   }
 
+  // ---- Ingé son : Matrix qui agrège TOUS les Main (PGM de chaque langue + salle) + son propre
+  // bus talkback (il participe au mesh comme n'importe quel commentateur, avec son propre micro).
+  if (config.soundEngineerEnabled) {
+    const eng = config.soundEngineer;
+    const owner = { kind: 'soundEngineer', id: null };
+    const allMainRefs = [
+      ...config.languages.map((l) => ({ kind: 'languagePgm', id: l.id })),
+      ...(config.roomMixEnabled ? [{ kind: 'roomMix', id: null }] : []),
+    ];
+    matrixDemands.push({ role: BusRole.ENGINEER_MONITOR, format: ChannelFormat.STEREO, name: `Ret ${eng.name}`, feeders: [eng.name], sends: [], talkbackNames: [eng.name], owner, mainRefs: allMainRefs, coveredNames: [] });
+    talkbackBusDemands.push({ role: BusRole.TALKBACK, format: ChannelFormat.MONO, name: `TB ${eng.name}`, feeders: [eng.name], sends: [], talkbackNames: [eng.name], owner, coveredNames: [] });
+  }
+
   // ---- Talkback nu (pas de retour du tout, mais talkback quand même) ----
   for (const t of fallbackTalkbackOnly) {
     busDirectDemands.push({ role: BusRole.TALKBACK, format: ChannelFormat.MONO, name: `TB ${t.name}`, feeders: [t.name], sends: [], talkbackNames: [t.name], owner: { kind: t.ownerKind, id: t.ownerId }, coveredNames: [] });
@@ -190,6 +208,7 @@ function resolveOwnerOutput(config, owner) {
       return null;
     }
     case 'fieldMicReturn': return config.fieldMics.find((m) => m.id === owner.id)?.returnOutput ?? null;
+    case 'soundEngineer': return config.soundEngineer?.returnOutput ?? null;
     default: return null;
   }
 }
@@ -200,7 +219,7 @@ function fillPool(result, demands, type, capacity, overflow) {
       result.busPlan.push({
         role: d.role, busType: type, busNumber: i + 1, format: d.format, name: d.name,
         feedingSourceNames: d.feeders, sends: d.sends || [], talkbackNames: d.talkbackNames,
-        owner: d.owner, mainRef: d.mainRef || null, coveredNames: d.coveredNames || [],
+        owner: d.owner, mainRef: d.mainRef || null, mainRefs: d.mainRefs || null, coveredNames: d.coveredNames || [],
       });
     } else if (overflow) {
       overflow.push(d);
