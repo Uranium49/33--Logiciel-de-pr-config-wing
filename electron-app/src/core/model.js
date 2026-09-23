@@ -12,8 +12,6 @@ const ChannelFormat = { MONO: 'mono', STEREO: 'stereo' };
 
 const PcSourceCategory = { JINGLE: 'jingle', VIDEO: 'video', AMBIANCE: 'ambiance' };
 
-const PcConnectionType = { ASIO_LOCAL: 'asioLocal', DANTE: 'dante' };
-
 const WingBusType = { MAIN: 'main', MATRIX: 'matrix', BUS: 'bus' };
 
 const BusRole = {
@@ -32,6 +30,7 @@ const BusRole = {
 // énumèrent) — à confirmer/ajuster une fois connecté à la console réelle.
 const WingIoGroup = {
   LOCAL: 'local',
+  DANTE: 'dante',
   AES50_A: 'aes50A',
   AES50_B: 'aes50B',
   AES50_C: 'aes50C',
@@ -41,8 +40,12 @@ const WingIoGroup = {
   USB_PLAYER: 'usbPlayer',
 };
 
+// Dante arrive via une carte d'extension optionnelle (pas de port dédié natif sur le Rack) — la
+// taille exacte dépend du modèle de carte installée (32x32 ou 64x64 selon la génération). 64 est
+// pris par défaut ; ajuste `count` ici si ta carte est plus petite.
 const WING_INPUT_GROUPS = {
   [WingIoGroup.LOCAL]: { oscCode: 'LCL', label: 'Local (XLR console)', count: 24 },
+  [WingIoGroup.DANTE]: { oscCode: 'DANTE', label: 'Dante (carte)', count: 64 },
   [WingIoGroup.AES50_A]: { oscCode: 'A50A', label: 'AES50-A', count: 48 },
   [WingIoGroup.AES50_B]: { oscCode: 'A50B', label: 'AES50-B', count: 48 },
   [WingIoGroup.AES50_C]: { oscCode: 'A50C', label: 'AES50-C', count: 48 },
@@ -56,6 +59,7 @@ const WING_INPUT_GROUPS = {
 // "USB Player" en sortie (c'est un lecteur, pas un enregistreur, côté patch de sortie).
 const WING_OUTPUT_GROUPS = {
   [WingIoGroup.LOCAL]: { oscCode: 'LCL', label: 'Local (XLR console)', count: 8 },
+  [WingIoGroup.DANTE]: { oscCode: 'DANTE', label: 'Dante (carte)', count: 64 },
   [WingIoGroup.AES50_A]: { oscCode: 'A50A', label: 'AES50-A', count: 48 },
   [WingIoGroup.AES50_B]: { oscCode: 'A50B', label: 'AES50-B', count: 48 },
   [WingIoGroup.AES50_C]: { oscCode: 'A50C', label: 'AES50-C', count: 48 },
@@ -113,9 +117,8 @@ function createPcSource(name) {
   return {
     id: nextId(), name,
     category: PcSourceCategory.JINGLE,
-    connectionType: PcConnectionType.DANTE,
     format: ChannelFormat.STEREO,
-    physicalInput: null,
+    physicalInput: null, // patché comme n'importe quelle source depuis l'écran Patch physique
   };
 }
 
@@ -158,7 +161,7 @@ function allCommentators(config) {
 }
 
 module.exports = {
-  ReturnMode, ChannelFormat, PcSourceCategory, PcConnectionType, WingBusType, BusRole, WingIoGroup,
+  ReturnMode, ChannelFormat, PcSourceCategory, WingBusType, BusRole, WingIoGroup,
   WING_INPUT_GROUPS, WING_OUTPUT_GROUPS, WING_CAPACITY,
   createPhysicalRef, createCommentator, createLanguage, createFieldMic, createPcSource,
   createProductionConfig, sportMultiLanguageTemplate, allCommentators,

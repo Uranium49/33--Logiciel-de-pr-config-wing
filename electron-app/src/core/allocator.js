@@ -24,18 +24,18 @@ function allocateInputs(config, capacity, result) {
 
   for (const lang of config.languages) {
     for (const c of lang.commentators) {
-      cursor = placeInput(result, c.name, `${c.name} (${lang.name})`, 1, cursor, null, c.physicalInput);
+      cursor = placeInput(result, c.name, `${c.name} (${lang.name})`, 1, cursor, c.physicalInput);
     }
   }
 
   for (const mic of config.fieldMics) {
     const slots = mic.format === ChannelFormat.STEREO ? 2 : 1;
-    cursor = placeInput(result, mic.name, mic.name, slots, cursor, null, mic.physicalInput);
+    cursor = placeInput(result, mic.name, mic.name, slots, cursor, mic.physicalInput);
   }
 
   for (const pc of config.pcSources) {
     const slots = pc.format === ChannelFormat.STEREO ? 2 : 1;
-    cursor = placeInput(result, pc.name, pc.name, slots, cursor, pc.connectionType, pc.physicalInput);
+    cursor = placeInput(result, pc.name, pc.name, slots, cursor, pc.physicalInput);
   }
 
   const totalRequested = cursor - 1;
@@ -50,13 +50,9 @@ function allocateInputs(config, capacity, result) {
   }
 }
 
-function placeInput(result, sourceName, displayName, slots, cursor, connectionType, physicalInput) {
-  const patchLabel = connectionType == null
-    ? displayName
-    : `${displayName} [${connectionType === 'dante' ? 'Dante' : 'ASIO local'}]`;
-
+function placeInput(result, sourceName, displayName, slots, cursor, physicalInput) {
   result.inputPlan.push({
-    sourceName, firstSlot: cursor, slotCount: slots, displayName, patchLabel, connectionType,
+    sourceName, firstSlot: cursor, slotCount: slots, displayName, patchLabel: displayName,
     physicalInput: physicalInput || null,
   });
   return cursor + slots;

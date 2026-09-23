@@ -217,18 +217,18 @@ function renderPcSourcesSection() {
     <tr>
       <td><input type="text" data-entity="pc" data-id="${pc.id}" data-field="name" value="${esc(pc.name)}" /></td>
       <td>${categorySelect(pc)}</td>
-      <td>${connectionSelect(pc)}</td>
       <td>${formatSelect('pc', pc.id, 'format', pc.format)}</td>
       <td><button class="btn danger" data-action="remove-pc" data-id="${pc.id}">✕</button></td>
     </tr>
-  `).join('') || '<tr><td colspan="5" class="empty-hint">Aucune source PC</td></tr>';
+  `).join('') || '<tr><td colspan="4" class="empty-hint">Aucune source PC</td></tr>';
 
   return `
     <table class="data">
-      <thead><tr><th>Nom</th><th>Catégorie</th><th>Connexion</th><th>Format</th><th></th></tr></thead>
+      <thead><tr><th>Nom</th><th>Catégorie</th><th>Format</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
     <button class="btn small add-row-btn" data-action="add-pc">+ Source PC</button>
+    <p class="empty-hint" style="margin-top:8px;">Le mode de connexion (Dante, AES50…) se choisit sur l'écran « Patch physique », comme pour n'importe quelle source.</p>
   `;
 }
 
@@ -243,13 +243,6 @@ function categorySelect(pc) {
   const options = [[M.PcSourceCategory.JINGLE, 'Jingle'], [M.PcSourceCategory.VIDEO, 'Vidéo'], [M.PcSourceCategory.AMBIANCE, 'Nappe/ambiance']];
   return `<select data-entity="pc" data-id="${pc.id}" data-field="category">
     ${options.map(([v, l]) => `<option value="${v}" ${v === pc.category ? 'selected' : ''}>${l}</option>`).join('')}
-  </select>`;
-}
-
-function connectionSelect(pc) {
-  const options = [[M.PcConnectionType.DANTE, 'Dante'], [M.PcConnectionType.ASIO_LOCAL, 'ASIO local']];
-  return `<select data-entity="pc" data-id="${pc.id}" data-field="connectionType">
-    ${options.map(([v, l]) => `<option value="${v}" ${v === pc.connectionType ? 'selected' : ''}>${l}</option>`).join('')}
   </select>`;
 }
 
@@ -380,7 +373,7 @@ function getInputPatchItems() {
     const input = bySourceName.get(src.name);
     if (!input) return;
     items.push({
-      key: `in:${src.id}`,
+      key: `input:${src.id}`,
       label: input.displayName,
       stereo: input.slotCount > 1,
       getRef: () => src.physicalInput,
@@ -396,7 +389,7 @@ function getInputPatchItems() {
 
 function getOutputPatchItems() {
   return state.plan.busPlan.map((bus) => ({
-    key: `out:${bus.busType}:${bus.busNumber}`,
+    key: `output:${bus.busType}:${bus.busNumber}`,
     label: bus.name,
     stereo: bus.format === M.ChannelFormat.STEREO,
     getRef: () => bus.physicalOutput,
