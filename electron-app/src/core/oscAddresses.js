@@ -10,10 +10,13 @@ const Channel = {
   fader: (ch) => `${Channel.node(ch)}/fdr`,
   inputConnectionGroup: (ch) => `${Channel.node(ch)}/in/conn/grp`,
   inputConnectionIndex: (ch) => `${Channel.node(ch)}/in/conn/in`,
-  // EXPÉRIMENTAL : aucune source publique (PDF officiel, module Companion) ne documente le paramètre
-  // d'assignation à un groupe d'automix — la doc officielle confirme juste l'existence de la
-  // fonctionnalité ("2 groupes de gain-sharing sur 16 canaux max chacun"), pas son adresse OSC.
-  autoMixGroup: (ch) => `${Channel.node(ch)}/autogrp`,
+  // CONFIRMÉ par observation directe : l'automix n'est PAS un paramètre dédié ("autogrp") mais le
+  // slot post-insert du channel, détourné en mode automix. /postins/mode vaut "FX" par défaut, ou
+  // "AUTO_X"/"AUTO_Y" pour rejoindre le groupe d'automix 1 ou 2 — /postins/on doit être à 1 pour que
+  // ce soit actif ($stat passe alors à "OK", confirmé en écoute). /postins/w est une télémétrie
+  // lecture-seule (poids de gain-sharing en temps réel), jamais à écrire.
+  postInsertMode: (ch) => `${Channel.node(ch)}/postins/mode`,
+  postInsertOn: (ch) => `${Channel.node(ch)}/postins/on`,
   mainSendOn: (ch, main) => `${Channel.node(ch)}/main/${main}/on`,
   mainSendLevel: (ch, main) => `${Channel.node(ch)}/main/${main}/lvl`,
   sendOn: (ch, bus) => `${Channel.node(ch)}/send/${bus}/on`,

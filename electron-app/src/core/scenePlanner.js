@@ -8,6 +8,8 @@ const { Channel, AuxInput, Bus, Matrix, Main, IoInput, IoOutput, Oscillator } = 
 const { ChannelFormat, WingBusType, BusRole, WING_INPUT_GROUPS, WING_OUTPUT_GROUPS, WING_CAPACITY } = require('./model');
 
 const AUTOMIX_REF_LEVEL_DB = -10.0;
+// Seuls 2 groupes existent sur la Wing (doc officielle) -> "AUTO_X"/"AUTO_Y", confirmés en écoute.
+const AUTOMIX_POSTINS_MODE = { 1: 'AUTO_X', 2: 'AUTO_Y' };
 
 function i(value) { return { type: 'i', value }; }
 function f(value) { return { type: 'f', value }; }
@@ -91,10 +93,11 @@ function addInputMessages(messages, input) {
     if (style.col != null) messages.push({ address: addr.color(chOrAux), args: [i(style.col)] });
     if (style.icon != null) messages.push({ address: addr.icon(chOrAux), args: [i(style.icon)] });
 
-    // Automix : les 2 casteurs d'une même langue partagent un groupe de gain-sharing (EXPÉRIMENTAL,
-    // adresse non confirmée — voir oscAddresses.js). Uniquement sur les 40 canaux principaux.
+    // Automix : CONFIRMÉ — passe par le slot post-insert du channel (/postins/mode = "AUTO_X"/
+    // "AUTO_Y"), pas un paramètre dédié. Uniquement sur les 40 canaux principaux.
     if (input.automixGroup && !isAux) {
-      messages.push({ address: Channel.autoMixGroup(chOrAux), args: [i(input.automixGroup)] });
+      messages.push({ address: Channel.postInsertMode(chOrAux), args: [s(AUTOMIX_POSTINS_MODE[input.automixGroup])] });
+      messages.push({ address: Channel.postInsertOn(chOrAux), args: [i(1)] });
     }
 
     // Piste de référence automix : fader à -10dB, ne sort dans AUCUN bus/main/matrix. On ne se
