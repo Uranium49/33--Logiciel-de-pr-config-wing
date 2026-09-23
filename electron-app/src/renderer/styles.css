@@ -285,3 +285,16 @@ table.data input, table.data select { padding: 5px 7px; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: #333944; border-radius: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* Diagnostic OSC */
+.osc-log {
+  background: var(--bg-elevated); border: 1px solid var(--border-soft); border-radius: var(--radius);
+  max-height: 480px; overflow-y: auto; font-family: 'Consolas', 'Cascadia Mono', monospace; font-size: 12px;
+}
+.log-row {
+  display: flex; gap: 10px; padding: 4px 10px; border-bottom: 1px solid #2a2e36;
+}
+.log-row:last-child { border-bottom: none; }
+.log-time { color: var(--text-faint); min-width: 68px; }
+.log-addr { color: var(--accent-hover); min-width: 220px; }
+.log-args { color: var(--text-dim); }

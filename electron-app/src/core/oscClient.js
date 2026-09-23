@@ -61,4 +61,22 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-module.exports = { sendAllMessages, testConnection, DEFAULT_PORT };
+/** Ouvre une écoute persistante : appelle onMessage(address, args) pour tout ce que la console
+ * renvoie (réponses aux "get", échos de changements faits à la main sur la console, meters...).
+ * Sert d'outil de diagnostic pour découvrir la VRAIE adresse d'un paramètre en observant ce que la
+ * console envoie quand on agit directement sur elle (écran tactile, Wing-Edit...), plutôt que de
+ * deviner. Retourne { query(address), send(address, args), stop() }. */
+function startMonitor(host, port, onMessage, onError) {
+  const udpPort = openPort(host, port || DEFAULT_PORT);
+  udpPort.on('message', (msg) => onMessage(msg.address, msg.args || []));
+  if (onError) udpPort.on('error', onError);
+  udpPort.open();
+
+  return {
+    query: (address) => udpPort.send({ address, args: [] }),
+    send: (address, args) => udpPort.send({ address, args }),
+    stop: () => { try { udpPort.close(); } catch { /* déjà fermé */ } },
+  };
+}
+
+module.exports = { sendAllMessages, testConnection, startMonitor, DEFAULT_PORT };

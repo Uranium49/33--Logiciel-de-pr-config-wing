@@ -26,6 +26,9 @@ const state = {
   messages: [],
   patchInputCategory: M.WingIoGroup.LOCAL,
   patchOutputCategory: M.WingIoGroup.LOCAL,
+  monitor: null,          // { query, send, stop } quand l'écoute OSC est active
+  diagnosticLog: [],      // { time, address, argsText }
+  diagnosticQuery: '/ch/1/name',
 };
 state.selectedLanguageId = state.config.languages[0]?.id ?? null;
 
@@ -66,6 +69,7 @@ function render() {
   renderSidebarSummary();
   renderConfigScreen();
   renderPatchScreen();
+  renderDiagnosticScreen();
 }
 
 function renderSidebarSummary() {
@@ -438,6 +442,52 @@ function findPatchItemByKey(key) {
 }
 
 // ---------------------------------------------------------------------------
+// Diagnostic OSC — écoute tout ce que la console renvoie, pour trouver la vraie adresse d'un
+// paramètre (ex: renomme un canal à la main sur la Wing/Wing-Edit et regarde ce qui apparaît ici)
+// plutôt que deviner.
+// ---------------------------------------------------------------------------
+
+function appendDiagnosticEntry(address, args) {
+  const argsText = (args || []).map((a) => (a && typeof a === 'object' ? JSON.stringify(a.value ?? a) : String(a))).join(' ');
+  state.diagnosticLog.push({ time: new Date().toLocaleTimeString(), address, argsText });
+  if (state.diagnosticLog.length > 300) state.diagnosticLog.shift();
+  renderDiagnosticScreen();
+}
+
+function renderDiagnosticScreen() {
+  const el = document.getElementById('screen-diagnostic');
+  if (!el) return;
+
+  const rows = state.diagnosticLog.slice().reverse().map((e) => `
+    <div class="log-row"><span class="log-time">${e.time}</span><span class="log-addr">${esc(e.address)}</span><span class="log-args">${esc(e.argsText)}</span></div>
+  `).join('') || '<div class="empty-hint">Aucun message reçu pour l\'instant — démarre l\'écoute, puis agis directement sur la console (écran tactile, Wing-Edit) pour voir ce qu\'elle renvoie.</div>';
+
+  el.innerHTML = `
+    <h1 class="page-title">Diagnostic OSC</h1>
+    <p class="page-subtitle">
+      Écoute tout ce que la console renvoie sur le réseau. Utile pour trouver la vraie adresse d'un
+      paramètre : démarre l'écoute, puis renomme un canal (ou patche une entrée) directement sur
+      l'écran de la Wing ou via Wing-Edit — l'adresse exacte qu'elle utilise devrait apparaître ici.
+    </p>
+
+    <div style="display:flex; gap:8px; margin-bottom:14px;">
+      <button class="btn ${state.monitor ? '' : 'primary'}" data-action="toggle-monitor">
+        ${state.monitor ? '⏹ Arrêter l\'écoute' : '▶ Démarrer l\'écoute'}
+      </button>
+      <button class="btn" data-action="clear-diagnostic-log">Vider le journal</button>
+    </div>
+
+    <div style="display:flex; gap:8px; margin-bottom:16px; align-items:center;">
+      <input type="text" id="diagnostic-query" value="${esc(state.diagnosticQuery)}" placeholder="/ch/1/name" style="max-width:220px;" />
+      <button class="btn" data-action="query-address" ${state.monitor ? '' : 'disabled'}>Interroger (get)</button>
+      <span class="empty-hint" style="margin:0;">Envoie l'adresse sans argument — la console répond en général avec sa valeur actuelle.</span>
+    </div>
+
+    <div class="osc-log">${rows}</div>
+  `;
+}
+
+// ---------------------------------------------------------------------------
 // Actions (clics)
 // ---------------------------------------------------------------------------
 
@@ -540,6 +590,33 @@ const actions = {
     setStatus('Test de connexion en cours…');
     const ok = await oscClient.testConnection(state.wingHost, state.wingPort, 2000);
     setStatus(ok ? `Connexion OK avec ${state.wingHost}:${state.wingPort}.` : 'Pas de réponse de la console (vérifie IP/réseau).');
+  },
+  'toggle-monitor': () => {
+    if (state.monitor) {
+      state.monitor.stop();
+      state.monitor = null;
+      setStatus('Écoute OSC arrêtée.');
+    } else {
+      state.monitor = oscClient.startMonitor(
+        state.wingHost, state.wingPort,
+        (address, args) => appendDiagnosticEntry(address, args),
+        (err) => setStatus(`Erreur d'écoute OSC : ${err.message}`)
+      );
+      setStatus(`Écoute OSC démarrée sur ${state.wingHost}:${state.wingPort}. Agis sur la console pour voir ses messages.`);
+    }
+    renderDiagnosticScreen();
+  },
+  'clear-diagnostic-log': () => {
+    state.diagnosticLog = [];
+    renderDiagnosticScreen();
+  },
+  'query-address': () => {
+    const input = document.getElementById('diagnostic-query');
+    const address = (input?.value || '').trim();
+    if (!address) return;
+    state.diagnosticQuery = address;
+    if (!state.monitor) { setStatus('Démarre l\'écoute avant d\'interroger.'); return; }
+    state.monitor.query(address);
   },
   'select-patch-category': (_id, el) => {
     if (el.dataset.kind === 'input') state.patchInputCategory = el.dataset.category;
@@ -646,6 +723,7 @@ document.querySelectorAll('nav.nav button').forEach((btn) => {
     document.querySelectorAll('nav.nav button').forEach((b) => b.classList.toggle('active', b === btn));
     document.getElementById('screen-config').classList.toggle('active', state.screen === 'config');
     document.getElementById('screen-patch').classList.toggle('active', state.screen === 'patch');
+    document.getElementById('screen-diagnostic').classList.toggle('active', state.screen === 'diagnostic');
   });
 });
 
