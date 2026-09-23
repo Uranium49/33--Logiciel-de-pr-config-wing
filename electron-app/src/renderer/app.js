@@ -29,6 +29,7 @@ const state = {
   monitor: null,          // { query, send, stop } quand l'écoute OSC est active
   diagnosticLog: [],      // { time, address, argsText }
   diagnosticQuery: '/ch/1/name',
+  discoveredConsoles: [], // { ip, name, session, model, version, raw }
 };
 state.selectedLanguageId = state.config.languages[0]?.id ?? null;
 
@@ -470,6 +471,27 @@ function findPatchItemByKey(key) {
 }
 
 // ---------------------------------------------------------------------------
+// Découverte réseau — broadcast "/?" et collecte des réponses (voir oscClient.discoverConsoles).
+// ---------------------------------------------------------------------------
+
+function renderDiscoveredConsoles() {
+  const el = document.getElementById('wing-discovered');
+  if (!el) return;
+
+  if (state.discoveredConsoles.length === 0) {
+    el.innerHTML = '';
+    return;
+  }
+
+  el.innerHTML = state.discoveredConsoles.map((c) => `
+    <div class="discovered-item" data-action="select-discovered-console" data-id="${esc(c.ip)}">
+      <div class="discovered-name">${esc(c.model || c.name)}</div>
+      <div class="discovered-ip">${esc(c.ip)}${c.version ? ' — v' + esc(c.version) : ''}</div>
+    </div>
+  `).join('');
+}
+
+// ---------------------------------------------------------------------------
 // Diagnostic OSC — écoute tout ce que la console renvoie, pour trouver la vraie adresse d'un
 // paramètre (ex: renomme un canal à la main sur la Wing/Wing-Edit et regarde ce qui apparaît ici)
 // plutôt que deviner.
@@ -627,6 +649,21 @@ const actions = {
     setStatus('Test de connexion en cours…');
     const ok = await oscClient.testConnection(state.wingHost, state.wingPort, 2000);
     setStatus(ok ? `Connexion OK avec ${state.wingHost}:${state.wingPort}.` : 'Pas de réponse de la console (vérifie IP/réseau).');
+  },
+  'discover-wing': async () => {
+    setStatus('Recherche de consoles Wing sur le réseau…');
+    state.discoveredConsoles = await oscClient.discoverConsoles(2500, state.wingPort);
+    renderDiscoveredConsoles();
+    setStatus(state.discoveredConsoles.length > 0
+      ? `${state.discoveredConsoles.length} console(s) trouvée(s) — clique pour t'y connecter.`
+      : 'Aucune console trouvée. Vérifie que tu es sur le même réseau (le broadcast ne passe pas les VPN/sous-réseaux séparés).');
+  },
+  'select-discovered-console': (ip) => {
+    const console_ = state.discoveredConsoles.find((c) => c.ip === ip);
+    if (!console_) return;
+    state.wingHost = ip;
+    document.getElementById('wing-host').value = ip;
+    setStatus(`IP renseignée : ${ip} (${console_.model || console_.name}).`);
   },
   'toggle-monitor': () => {
     if (state.monitor) {

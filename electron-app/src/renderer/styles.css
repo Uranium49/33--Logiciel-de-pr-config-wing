@@ -95,6 +95,15 @@ nav.nav button.active { background: var(--accent-soft); color: var(--accent-hove
 .side-row { display: flex; gap: 6px; }
 .side-row > * { flex: 1; }
 
+#wing-discovered { display: flex; flex-direction: column; gap: 4px; margin: 2px 0; }
+.discovered-item {
+  background: var(--bg-card); border: 1px solid var(--border-soft); border-radius: var(--radius-sm);
+  padding: 6px 8px; cursor: pointer;
+}
+.discovered-item:hover { border-color: var(--accent); }
+.discovered-name { font-size: 12px; font-weight: 600; }
+.discovered-ip { font-size: 11px; color: var(--text-faint); }
+
 .capacity-summary {
   background: var(--bg-card);
   border: 1px solid var(--border-soft);
