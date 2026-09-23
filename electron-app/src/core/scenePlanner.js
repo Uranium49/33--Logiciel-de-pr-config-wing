@@ -4,7 +4,7 @@
 //   - entier -> { type: 'i', value } / flottant -> { type: 'f', value } / chaîne -> { type: 's', value }
 // pour rester sans ambiguïté (contrairement à C#, JS n'a qu'un type "number").
 
-const { Channel, AuxInput, Bus, Matrix, Main } = require('./oscAddresses');
+const { Channel, AuxInput, Bus, Matrix, Main, IoInput, IoOutput } = require('./oscAddresses');
 const { ChannelFormat, WingBusType, BusRole, WING_INPUT_GROUPS, WING_OUTPUT_GROUPS } = require('./model');
 
 function i(value) { return { type: 'i', value }; }
@@ -61,18 +61,31 @@ function addInputMessages(messages, input) {
 
     // Patcher l'entrée AVANT de nommer/colorer : certaines consoles réappliquent un nom "auto"
     // basé sur la source dès qu'on change le patch, ce qui écraserait un nom envoyé avant.
+    let groupCode = null;
+    let sourceIndex = null;
     if (input.physicalInput) {
-      messages.push({ address: addr.inputConnectionGroup(chOrAux), args: [s(WING_INPUT_GROUPS[input.physicalInput.group].oscCode)] });
-      messages.push({ address: addr.inputConnectionIndex(chOrAux), args: [i(input.physicalInput.index + n)] });
+      groupCode = WING_INPUT_GROUPS[input.physicalInput.group].oscCode;
+      sourceIndex = input.physicalInput.index + n;
+      messages.push({ address: addr.inputConnectionGroup(chOrAux), args: [s(groupCode)] });
+      messages.push({ address: addr.inputConnectionIndex(chOrAux), args: [i(sourceIndex)] });
     }
 
     // sourceName (identité courte, ex. "FR-Comm1") plutôt que displayName (ex. "FR-Comm1 (FR)",
     // réservé à l'UI) pour éviter une troncature disgracieuse sur la scribble strip.
     const label = truncateName(input.slotCount > 1 ? `${input.sourceName} ${n === 0 ? 'L' : 'R'}` : input.sourceName);
     messages.push({ address: addr.name(chOrAux), args: [s(label)] });
-
     if (style.col != null) messages.push({ address: addr.color(chOrAux), args: [i(style.col)] });
     if (style.icon != null) messages.push({ address: addr.icon(chOrAux), args: [i(style.icon)] });
+
+    // Nomme/colore AUSSI la source physique elle-même (pas seulement le channel) — CONFIRMÉ par
+    // observation directe sur une Wing réelle : /io/in/LCL/8/col et /io/in/LCL/8/icon s'affichent
+    // en écho quand le channel patché sur ce port est modifié. /name suit la même logique par
+    // symétrie avec col/icon.
+    if (groupCode) {
+      messages.push({ address: IoInput.name(groupCode, sourceIndex), args: [s(label)] });
+      if (style.col != null) messages.push({ address: IoInput.color(groupCode, sourceIndex), args: [i(style.col)] });
+      if (style.icon != null) messages.push({ address: IoInput.icon(groupCode, sourceIndex), args: [i(style.icon)] });
+    }
   }
 }
 
@@ -86,11 +99,14 @@ function addBusMessages(messages, bus) {
   }
 
   // Patch de sortie AVANT le nommage (même raisonnement que pour les entrées, voir addInputMessages).
-  // EXPÉRIMENTAL : aucune source publique ne documente l'adresse de routage d'un bus/matrix/main
-  // vers un port de sortie physique — supposition par symétrie avec l'entrée, à vérifier.
+  // EXPÉRIMENTAL : contrairement à IoInput (confirmé sur console réelle), rien ne confirme l'existence
+  // ni l'adresse de /io/out/... ou de /main-matrix-bus/N/out/conn/... — supposition par symétrie.
   if (bus.physicalOutput) {
-    messages.push({ address: `${nodeAddr}/out/conn/grp`, args: [s(WING_OUTPUT_GROUPS[bus.physicalOutput.group].oscCode)] });
+    const outGroupCode = WING_OUTPUT_GROUPS[bus.physicalOutput.group].oscCode;
+    messages.push({ address: `${nodeAddr}/out/conn/grp`, args: [s(outGroupCode)] });
     messages.push({ address: `${nodeAddr}/out/conn/in`, args: [i(bus.physicalOutput.index)] });
+    messages.push({ address: IoOutput.name(outGroupCode, bus.physicalOutput.index), args: [s(truncateName(bus.name))] });
+    messages.push({ address: IoOutput.color(outGroupCode, bus.physicalOutput.index), args: [i(colorForBusName(bus.name))] });
   }
 
   messages.push({ address: nameAddr, args: [s(truncateName(bus.name))] });

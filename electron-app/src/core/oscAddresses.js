@@ -70,4 +70,23 @@ const Main = {
   matrixSendLevel: (main, mtx) => `${Main.node(main)}/send/MX${mtx}/lvl`,
 };
 
-module.exports = { Channel, AuxInput, Bus, Matrix, Main };
+// Port physique/réseau lui-même (pas le channel qui le lit) — CONFIRMÉ par observation directe sur
+// une Wing réelle (journal de diagnostic, écoute abonnée /*s) : renommer/colorer le channel 1 patché
+// sur "Local #8" fait apparaître en écho /io/in/LCL/8/col et /io/in/LCL/8/icon avec les mêmes
+// valeurs. Le groupe "LCL" confirme aussi le code utilisé pour Local ; /name suit très probablement
+// le même schéma par symétrie avec col/icon (non observé directement, mais cohérent).
+const IoInput = {
+  node: (groupCode, index) => `/io/in/${groupCode}/${index}`,
+  name: (groupCode, index) => `${IoInput.node(groupCode, index)}/name`,
+  color: (groupCode, index) => `${IoInput.node(groupCode, index)}/col`,
+  icon: (groupCode, index) => `${IoInput.node(groupCode, index)}/icon`,
+};
+
+// Sortie physique/réseau — EXPÉRIMENTAL, par symétrie avec IoInput (non observé/confirmé).
+const IoOutput = {
+  node: (groupCode, index) => `/io/out/${groupCode}/${index}`,
+  name: (groupCode, index) => `${IoOutput.node(groupCode, index)}/name`,
+  color: (groupCode, index) => `${IoOutput.node(groupCode, index)}/col`,
+};
+
+module.exports = { Channel, AuxInput, Bus, Matrix, Main, IoInput, IoOutput };
