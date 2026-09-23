@@ -147,6 +147,15 @@ function addBusMessages(messages, bus) {
   messages.push({ address: nameAddr, args: [s(truncateName(bus.name))] });
   messages.push({ address: colorAddr, args: [i(colorForBusName(bus.name))] });
   messages.push({ address: monoAddr, args: [i(bus.format === ChannelFormat.MONO ? 1 : 0)] });
+
+  // CONFIRMÉ sur console réelle : un bus /bus/N a par défaut son send vers Main 1 activé. On ne
+  // route jamais nos propres bus (retours, talkback) vers un Main dans cette architecture — on coupe
+  // donc explicitement tous les Main sends pour éviter une fuite audio par défaut non désirée.
+  if (bus.busType === WingBusType.BUS) {
+    for (let m = 1; m <= WING_CAPACITY.mainBuses; m++) {
+      messages.push({ address: Bus.mainSendOn(bus.busNumber, m), args: [i(0)] });
+    }
+  }
 }
 
 /** Envoie le contenu direct des bus PGM / mix salle (bus.sends, calculé par l'allocateur) : ce sont
@@ -283,6 +292,10 @@ function buildClearAllMessages(capacity) {
     messages.push({ address: `${Bus.node(bus)}/out/conn/grp`, args: [s('OFF')] });
     messages.push({ address: Bus.name(bus), args: [s('')] });
     messages.push({ address: Bus.color(bus), args: [i(DEFAULT_COLOR)] });
+    // CONFIRMÉ : un bus a par défaut son send vers Main 1 activé -- on le coupe explicitement.
+    for (let m = 1; m <= capacity.mainBuses; m++) {
+      messages.push({ address: Bus.mainSendOn(bus, m), args: [i(0)] });
+    }
   }
   for (let mtx = 1; mtx <= capacity.matrixBuses; mtx++) {
     messages.push({ address: `${Matrix.node(mtx)}/out/conn/grp`, args: [s('OFF')] });

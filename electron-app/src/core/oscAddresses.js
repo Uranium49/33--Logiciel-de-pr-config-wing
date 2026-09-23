@@ -46,11 +46,14 @@ const Bus = {
   mute: (bus) => `${Bus.node(bus)}/mute`,
   fader: (bus) => `${Bus.node(bus)}/fdr`,
   monoSwitch: (bus) => `${Bus.node(bus)}/busmono`,
-  // Un bus peut alimenter un autre bus ou une matrice (architecture Channel -> Bus -> Matrix).
+  // Un bus peut alimenter un autre bus, une matrice, OU un main (architecture confirmée : un bus
+  // neuf a par défaut son send vers Main 1 activé — à couper explicitement, voir scenePlanner.js).
   sendOn: (bus, targetBus) => `${Bus.node(bus)}/send/${targetBus}/on`,
   sendLevel: (bus, targetBus) => `${Bus.node(bus)}/send/${targetBus}/lvl`,
   matrixSendOn: (bus, mtx) => `${Bus.node(bus)}/send/MX${mtx}/on`,
   matrixSendLevel: (bus, mtx) => `${Bus.node(bus)}/send/MX${mtx}/lvl`,
+  mainSendOn: (bus, main) => `${Bus.node(bus)}/main/${main}/on`,
+  mainSendLevel: (bus, main) => `${Bus.node(bus)}/main/${main}/lvl`,
 };
 
 const Matrix = {

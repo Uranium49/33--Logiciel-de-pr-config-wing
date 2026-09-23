@@ -43,15 +43,16 @@ const WingIoGroup = {
 };
 
 // Codes de groupe CONFIRMÉS par observation directe sur console réelle (journal de diagnostic,
-// /io/in/{grp}/{idx}/... et /ch/N/in/conn/grp) : "LCL", "A"/"B" (AES50), "USB". Le schéma n'est pas
-// uniforme (LCL = 3 lettres, AES50 = 1 lettre, USB = 3 lettres sans le "A" de "Audio") donc
-// DANTE/AESEBU/StageConnect/USB Player restent des suppositions non vérifiées.
+// /io/in/{grp}/{idx}/... et /ch/N/in/conn/grp) : "LCL", "A"/"B" (AES50), "USB", et "MOD" pour la
+// carte d'extension (Dante) — le code générique nomme l'emplacement physique de la carte ("Module"),
+// pas la marque du réseau qui y est installée. AESEBU/StageConnect/USB Player restent des
+// suppositions non vérifiées.
 // Dante arrive via une carte d'extension optionnelle (pas de port dédié natif sur le Rack) — la
 // taille exacte dépend du modèle de carte installée (32x32 ou 64x64 selon la génération). 64 est
 // pris par défaut ; ajuste `count` ici si ta carte est plus petite.
 const WING_INPUT_GROUPS = {
   [WingIoGroup.LOCAL]: { oscCode: 'LCL', label: 'Local (XLR console)', count: 24 },
-  [WingIoGroup.DANTE]: { oscCode: 'DANTE', label: 'Dante (carte)', count: 64 },
+  [WingIoGroup.DANTE]: { oscCode: 'MOD', label: 'Dante (carte)', count: 64 },
   [WingIoGroup.AES50_A]: { oscCode: 'A', label: 'AES50-A', count: 48 },
   [WingIoGroup.AES50_B]: { oscCode: 'B', label: 'AES50-B', count: 48 },
   [WingIoGroup.AES50_C]: { oscCode: 'C', label: 'AES50-C', count: 48 },
@@ -69,7 +70,7 @@ const WING_INPUT_GROUPS = {
 // "USB Player" en sortie (c'est un lecteur, pas un enregistreur, côté patch de sortie).
 const WING_OUTPUT_GROUPS = {
   [WingIoGroup.LOCAL]: { oscCode: 'LCL', label: 'Local (XLR console)', count: 8 },
-  [WingIoGroup.DANTE]: { oscCode: 'DANTE', label: 'Dante (carte)', count: 64 },
+  [WingIoGroup.DANTE]: { oscCode: 'MOD', label: 'Dante (carte)', count: 64 },
   [WingIoGroup.AES50_A]: { oscCode: 'A', label: 'AES50-A', count: 48 },
   [WingIoGroup.AES50_B]: { oscCode: 'B', label: 'AES50-B', count: 48 },
   [WingIoGroup.AES50_C]: { oscCode: 'C', label: 'AES50-C', count: 48 },
