@@ -46,20 +46,20 @@ public sealed class ResourceAllocator
         {
             foreach (var c in lang.Commentators)
             {
-                cursor = PlaceInput(result, $"{c.Name} ({lang.Name})", slots: 1, cursor,
+                cursor = PlaceInput(result, c.Name, $"{c.Name} ({lang.Name})", slots: 1, cursor,
                     connectionType: null);
             }
         }
 
         foreach (var mic in config.FieldMics)
         {
-            cursor = PlaceInput(result, mic.Name, slots: 1, cursor, connectionType: null);
+            cursor = PlaceInput(result, mic.Name, mic.Name, slots: 1, cursor, connectionType: null);
         }
 
         foreach (var pc in config.PcSources)
         {
             int slots = pc.Format == ChannelFormat.Stereo ? 2 : 1;
-            cursor = PlaceInput(result, pc.Name, slots, cursor, pc.ConnectionType);
+            cursor = PlaceInput(result, pc.Name, pc.Name, slots, cursor, pc.ConnectionType);
         }
 
         int totalRequested = cursor - 1;
@@ -74,14 +74,14 @@ public sealed class ResourceAllocator
         }
     }
 
-    private static int PlaceInput(AllocationResult result, string sourceName, int slots, int cursor,
-        PcConnectionType? connectionType)
+    private static int PlaceInput(AllocationResult result, string sourceName, string displayName, int slots,
+        int cursor, PcConnectionType? connectionType)
     {
-        string label = connectionType is null
-            ? sourceName
-            : $"{sourceName} [{(connectionType == PcConnectionType.Dante ? "Dante" : "ASIO local")}]";
+        string patchLabel = connectionType is null
+            ? displayName
+            : $"{displayName} [{(connectionType == PcConnectionType.Dante ? "Dante" : "ASIO local")}]";
 
-        result.InputPlan.Add(new InputAssignment(sourceName, cursor, slots, label, connectionType));
+        result.InputPlan.Add(new InputAssignment(sourceName, cursor, slots, displayName, patchLabel, connectionType));
         return cursor + slots;
     }
 

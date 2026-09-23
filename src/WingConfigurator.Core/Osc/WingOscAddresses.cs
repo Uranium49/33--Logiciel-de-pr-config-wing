@@ -42,6 +42,15 @@ public static class WingOscAddresses
         public static string Name(int aux) => $"{Node(aux)}/name";
         public static string InputConnectionGroup(int aux) => $"{Node(aux)}/in/conn/grp";
         public static string InputConnectionIndex(int aux) => $"{Node(aux)}/in/conn/in";
+
+        public static string MainSendOn(int aux, int main) => $"{Node(aux)}/main/{main}/on";
+        public static string MainSendLevel(int aux, int main) => $"{Node(aux)}/main/{main}/lvl";
+
+        public static string SendOn(int aux, int bus) => $"{Node(aux)}/send/{bus}/on";
+        public static string SendLevel(int aux, int bus) => $"{Node(aux)}/send/{bus}/lvl";
+
+        public static string MatrixSendOn(int aux, int mtx) => $"{Node(aux)}/send/MX{mtx}/on";
+        public static string MatrixSendLevel(int aux, int mtx) => $"{Node(aux)}/send/MX{mtx}/lvl";
     }
 
     /// <summary>Les 16 bus de mix stéréo (/bus/1-16), utilisés ici pour les retours casque et
@@ -89,17 +98,5 @@ public static class WingOscAddresses
         public static string Node(int group) => $"/mgrp/{group}";
         public static string Name(int group) => $"{Node(group)}/name";
         public static string Mute(int group) => $"{Node(group)}/mute";
-    }
-
-    /// <summary>Talkback : la Wing a un nombre fixe de générateurs de talkback identifiés par id
-    /// (typiquement "A"/"B" sur le matériel physique). On assigne ce générateur vers les bus/mtx/main
-    /// qui doivent être coupés lors du talk — ça ne consomme pas de bus supplémentaire.</summary>
-    public static class Talkback
-    {
-        public static string Node(string id) => $"/cfg/talk/{id}";
-        public static string On(string id) => $"{Node(id)}/$on";
-        public static string BusAssign(string id, int bus) => $"{Node(id)}/B{bus}";
-        public static string MatrixAssign(string id, int mtx) => $"{Node(id)}/MX{mtx}";
-        public static string MainAssign(string id, int main) => $"{Node(id)}/M{main}";
     }
 }
