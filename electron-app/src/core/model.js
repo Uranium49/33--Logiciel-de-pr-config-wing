@@ -40,15 +40,19 @@ const WingIoGroup = {
   USB_PLAYER: 'usbPlayer',
 };
 
+// Codes de groupe : "LCL" et "A"/"B" CONFIRMÉS par observation directe sur console réelle (journal
+// de diagnostic, /io/in/{grp}/{idx}/... et /ch/N/in/conn/grp). Le schéma n'est pas uniforme (LCL =
+// 3 lettres, AES50 = 1 seule lettre) donc DANTE/AESEBU/StageConnect/USB restent des suppositions
+// non vérifiées — à corriger avec la même méthode (écoute + patch manuel) dès que possible.
 // Dante arrive via une carte d'extension optionnelle (pas de port dédié natif sur le Rack) — la
 // taille exacte dépend du modèle de carte installée (32x32 ou 64x64 selon la génération). 64 est
 // pris par défaut ; ajuste `count` ici si ta carte est plus petite.
 const WING_INPUT_GROUPS = {
   [WingIoGroup.LOCAL]: { oscCode: 'LCL', label: 'Local (XLR console)', count: 24 },
   [WingIoGroup.DANTE]: { oscCode: 'DANTE', label: 'Dante (carte)', count: 64 },
-  [WingIoGroup.AES50_A]: { oscCode: 'A50A', label: 'AES50-A', count: 48 },
-  [WingIoGroup.AES50_B]: { oscCode: 'A50B', label: 'AES50-B', count: 48 },
-  [WingIoGroup.AES50_C]: { oscCode: 'A50C', label: 'AES50-C', count: 48 },
+  [WingIoGroup.AES50_A]: { oscCode: 'A', label: 'AES50-A', count: 48 },
+  [WingIoGroup.AES50_B]: { oscCode: 'B', label: 'AES50-B', count: 48 },
+  [WingIoGroup.AES50_C]: { oscCode: 'C', label: 'AES50-C', count: 48 },
   [WingIoGroup.AESEBU]: { oscCode: 'AESEBU', label: 'AES/EBU', count: 2 },
   [WingIoGroup.STAGECONNECT]: { oscCode: 'ST', label: 'StageConnect', count: 32 },
   [WingIoGroup.USB_AUDIO]: { oscCode: 'USBA', label: 'USB Audio (PC)', count: 48 },
@@ -60,9 +64,9 @@ const WING_INPUT_GROUPS = {
 const WING_OUTPUT_GROUPS = {
   [WingIoGroup.LOCAL]: { oscCode: 'LCL', label: 'Local (XLR console)', count: 8 },
   [WingIoGroup.DANTE]: { oscCode: 'DANTE', label: 'Dante (carte)', count: 64 },
-  [WingIoGroup.AES50_A]: { oscCode: 'A50A', label: 'AES50-A', count: 48 },
-  [WingIoGroup.AES50_B]: { oscCode: 'A50B', label: 'AES50-B', count: 48 },
-  [WingIoGroup.AES50_C]: { oscCode: 'A50C', label: 'AES50-C', count: 48 },
+  [WingIoGroup.AES50_A]: { oscCode: 'A', label: 'AES50-A', count: 48 },
+  [WingIoGroup.AES50_B]: { oscCode: 'B', label: 'AES50-B', count: 48 },
+  [WingIoGroup.AES50_C]: { oscCode: 'C', label: 'AES50-C', count: 48 },
   [WingIoGroup.AESEBU]: { oscCode: 'AESEBU', label: 'AES/EBU', count: 2 },
   [WingIoGroup.STAGECONNECT]: { oscCode: 'ST', label: 'StageConnect', count: 32 },
   [WingIoGroup.USB_AUDIO]: { oscCode: 'USBA', label: 'USB Audio (PC)', count: 48 },
