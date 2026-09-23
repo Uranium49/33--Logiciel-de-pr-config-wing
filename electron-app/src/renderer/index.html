@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Wing Configurator</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="brand"><span class="dot"></span> Wing Configurator</div>
+
+      <nav class="nav">
+        <button data-nav="config" class="active">⚙️ Configuration</button>
+        <button data-nav="patch">🔌 Patch physique</button>
+      </nav>
+
+      <div class="side-section">
+        <h4>Gabarits &amp; projet</h4>
+        <div class="side-row">
+          <button class="btn small" data-action="new-empty">Nouveau</button>
+          <button class="btn small" data-action="load-template-sport">Gabarit sport</button>
+        </div>
+        <div class="side-row">
+          <button class="btn small" data-action="load-project">Ouvrir…</button>
+          <button class="btn small" data-action="save-project">Enregistrer…</button>
+        </div>
+      </div>
+
+      <div class="side-section">
+        <h4>Récapitulatif</h4>
+        <div class="capacity-summary" id="capacity-summary"></div>
+      </div>
+
+      <div class="side-section">
+        <h4>Connexion Wing</h4>
+        <div class="side-row">
+          <div>
+            <label class="field-label">IP</label>
+            <input type="text" id="wing-host" data-bind="wingHost" />
+          </div>
+          <div>
+            <label class="field-label">Port</label>
+            <input type="number" id="wing-port" data-bind="wingPort" />
+          </div>
+        </div>
+        <button class="btn" data-action="test-connection">Tester la connexion</button>
+        <button class="btn primary" data-action="send-to-wing">Envoyer à la Wing</button>
+      </div>
+
+      <div class="side-section">
+        <h4>Export fallback</h4>
+        <button class="btn small" data-action="export-osc-script">Script OSC (.txt)</button>
+        <button class="btn small" data-action="export-patch-csv">Fiche de patch (.csv)</button>
+      </div>
+
+      <div id="status-message"></div>
+    </aside>
+
+    <main id="content">
+      <section id="screen-config" class="screen active"></section>
+      <section id="screen-patch" class="screen"></section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

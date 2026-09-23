@@ -1,0 +1,31 @@
+{
+  "name": "wing-configurator",
+  "version": "1.0.0",
+  "description": "Préconfigurateur Behringer Wing — patch, bus, matrix, talkback, envoi OSC",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "author": "",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "osc": "^2.4.5"
+  },
+  "devDependencies": {
+    "electron": "^32.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.wingconfigurator.app",
+    "productName": "Wing Configurator",
+    "win": {
+      "target": "portable"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*"
+    ]
+  }
+}
