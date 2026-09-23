@@ -5,7 +5,7 @@
 // pour rester sans ambiguïté (contrairement à C#, JS n'a qu'un type "number").
 
 const { Channel, AuxInput, Bus, Matrix, Main, IoInput, IoOutput, Oscillator } = require('./oscAddresses');
-const { ChannelFormat, WingBusType, BusRole, WING_INPUT_GROUPS, WING_OUTPUT_GROUPS } = require('./model');
+const { ChannelFormat, WingBusType, BusRole, WING_INPUT_GROUPS, WING_OUTPUT_GROUPS, WING_CAPACITY } = require('./model');
 
 const AUTOMIX_REF_LEVEL_DB = -10.0;
 
@@ -96,10 +96,20 @@ function addInputMessages(messages, input) {
       messages.push({ address: Channel.autoMixGroup(chOrAux), args: [i(input.automixGroup)] });
     }
 
-    // Piste de référence automix : fader à -10dB, ne sort dans AUCUN bus/main/matrix (pas de sends —
-    // c'est volontairement une entrée "morte" en dehors de sa fonction de calibration/gain-sharing).
+    // Piste de référence automix : fader à -10dB, ne sort dans AUCUN bus/main/matrix. On ne se
+    // contente pas de "ne rien envoyer" (un résidu de patch d'une précédente prod pourrait laisser
+    // cette piste active sur un ancien routage) : on COUPE explicitement tous les sends possibles.
     if (input.kind === 'automixRef') {
       messages.push({ address: addr.fader(chOrAux), args: [f(AUTOMIX_REF_LEVEL_DB)] });
+      for (let m = 1; m <= WING_CAPACITY.mainBuses; m++) {
+        messages.push({ address: addr.mainSendOn(chOrAux, m), args: [i(0)] });
+      }
+      for (let b = 1; b <= WING_CAPACITY.buses; b++) {
+        messages.push({ address: addr.sendOn(chOrAux, b), args: [i(0)] });
+      }
+      for (let mx = 1; mx <= WING_CAPACITY.matrixBuses; mx++) {
+        messages.push({ address: addr.matrixSendOn(chOrAux, mx), args: [i(0)] });
+      }
     }
 
     // Nomme/colore AUSSI la source physique elle-même (pas seulement le channel) — CONFIRMÉ par

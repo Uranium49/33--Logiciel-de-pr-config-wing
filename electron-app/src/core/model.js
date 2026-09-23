@@ -42,10 +42,10 @@ const WingIoGroup = {
   OSCILLATOR: 'oscillator',
 };
 
-// Codes de groupe : "LCL" et "A"/"B" CONFIRMÉS par observation directe sur console réelle (journal
-// de diagnostic, /io/in/{grp}/{idx}/... et /ch/N/in/conn/grp). Le schéma n'est pas uniforme (LCL =
-// 3 lettres, AES50 = 1 seule lettre) donc DANTE/AESEBU/StageConnect/USB restent des suppositions
-// non vérifiées — à corriger avec la même méthode (écoute + patch manuel) dès que possible.
+// Codes de groupe CONFIRMÉS par observation directe sur console réelle (journal de diagnostic,
+// /io/in/{grp}/{idx}/... et /ch/N/in/conn/grp) : "LCL", "A"/"B" (AES50), "USB". Le schéma n'est pas
+// uniforme (LCL = 3 lettres, AES50 = 1 lettre, USB = 3 lettres sans le "A" de "Audio") donc
+// DANTE/AESEBU/StageConnect/USB Player restent des suppositions non vérifiées.
 // Dante arrive via une carte d'extension optionnelle (pas de port dédié natif sur le Rack) — la
 // taille exacte dépend du modèle de carte installée (32x32 ou 64x64 selon la génération). 64 est
 // pris par défaut ; ajuste `count` ici si ta carte est plus petite.
@@ -57,7 +57,7 @@ const WING_INPUT_GROUPS = {
   [WingIoGroup.AES50_C]: { oscCode: 'C', label: 'AES50-C', count: 48 },
   [WingIoGroup.AESEBU]: { oscCode: 'AESEBU', label: 'AES/EBU', count: 2 },
   [WingIoGroup.STAGECONNECT]: { oscCode: 'ST', label: 'StageConnect', count: 32 },
-  [WingIoGroup.USB_AUDIO]: { oscCode: 'USBA', label: 'USB Audio (PC)', count: 48 },
+  [WingIoGroup.USB_AUDIO]: { oscCode: 'USB', label: 'USB Audio (PC)', count: 48 },
   [WingIoGroup.USB_PLAYER]: { oscCode: 'USBP', label: 'USB Player', count: 4 },
   // Générateur de test interne (confirmé comme groupe source par la doc marketing officielle : "11
   // input sources: Local, Aux In, AES/EBU, Oscillator, ..."), mais ni son code OSC ni ses paramètres
@@ -75,7 +75,7 @@ const WING_OUTPUT_GROUPS = {
   [WingIoGroup.AES50_C]: { oscCode: 'C', label: 'AES50-C', count: 48 },
   [WingIoGroup.AESEBU]: { oscCode: 'AESEBU', label: 'AES/EBU', count: 2 },
   [WingIoGroup.STAGECONNECT]: { oscCode: 'ST', label: 'StageConnect', count: 32 },
-  [WingIoGroup.USB_AUDIO]: { oscCode: 'USBA', label: 'USB Audio (PC)', count: 48 },
+  [WingIoGroup.USB_AUDIO]: { oscCode: 'USB', label: 'USB Audio (PC)', count: 48 },
 };
 
 const WING_CAPACITY = {
