@@ -465,10 +465,19 @@ function renderDiagnosticScreen() {
   el.innerHTML = `
     <h1 class="page-title">Diagnostic OSC</h1>
     <p class="page-subtitle">
-      Écoute tout ce que la console renvoie sur le réseau. Utile pour trouver la vraie adresse d'un
-      paramètre : démarre l'écoute, puis renomme un canal (ou patche une entrée) directement sur
-      l'écran de la Wing ou via Wing-Edit — l'adresse exacte qu'elle utilise devrait apparaître ici.
+      La Wing n'envoie RIEN sans abonnement explicite (doc officielle : adresse <code>/*s</code>,
+      valable 10s, à renouveler — exactement ce que font Wing-Edit et Mixing Station). L'écoute
+      ci-dessous s'abonne désormais automatiquement (renouvelé toutes les 8s). Démarre l'écoute, puis
+      renomme un canal (ou patche une entrée) directement sur l'écran de la Wing ou via Wing-Edit —
+      l'adresse exacte qu'elle utilise devrait apparaître ici.
     </p>
+    <div class="patch-note">
+      Toujours rien après ça ? Vérifie le <b>pare-feu Windows</b> : l'envoi (patch) fonctionne car
+      c'est du trafic sortant, mais les réponses de la console sont du trafic <b>entrant</b> — si
+      Windows Defender a bloqué "Wing Configurator.exe" / "Electron" en arrière-plan (souvent sans
+      prévenir sur une appli non signée), rien ne peut jamais revenir. Autorise l'appli en entrée
+      (réseaux privé ET public) puis réessaie.
+    </div>
 
     <div style="display:flex; gap:8px; margin-bottom:14px;">
       <button class="btn ${state.monitor ? '' : 'primary'}" data-action="toggle-monitor">
