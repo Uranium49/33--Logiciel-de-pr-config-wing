@@ -3,6 +3,7 @@
 // (b) une fiche de patch lisible en CSV pour l'ingé son.
 
 const { WING_INPUT_GROUPS, WING_OUTPUT_GROUPS } = require('./model');
+const { describeBusMix } = require('./describe');
 
 function formatArg(arg) {
   if (arg.type === 's') return arg.value.includes(' ') ? `"${arg.value}"` : arg.value;
@@ -42,7 +43,7 @@ function buildPatchCsvText(plan) {
       ? `${WING_OUTPUT_GROUPS[bus.physicalOutput.group].label} #${bus.physicalOutput.index}`
       : '(non patché)';
     lines.push(`${bus.busType};${bus.busNumber};${csv(bus.name)};${bus.format};` +
-      `${csv(bus.sends.join(', '))};${csv(bus.talkbackNames.join(', '))};${csv(outPatch)}`);
+      `${csv(describeBusMix(bus, plan))};${csv(bus.talkbackNames.join(', '))};${csv(outPatch)}`);
   }
 
   if (plan.errors.length > 0) {

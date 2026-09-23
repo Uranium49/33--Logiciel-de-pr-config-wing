@@ -1,22 +1,20 @@
 // Port JS du moteur d'allocation C# (WingConfigurator.Core.Allocation.ResourceAllocator).
-// Règles de priorité pour le pool de bus {Main, Matrix, Bus} :
-//   - PGM par langue + mix salle -> Main d'abord, débordement -> Bus
-//   - Retours casque personnels (commentateurs + micros terrain) -> Matrix d'abord, débordement -> Bus
-//   - Bus de langue partagé -> Bus directement
 //
-// Talkback : TOUJOURS actif pour un commentateur. Perso -> talkback ciblé sur lui seul (tagué sur son
-// bus perso, aucune capacité supplémentaire). Bus de langue partagé -> talkback commun à tout le groupe.
-// Une personne sans aucun retour mais qui veut du talkback (micro terrain) obtient un petit bus mono dédié.
+// Architecture des retours (mix-minus via bus, pas via sends directs) :
+//   Chaque retour (perso commentateur, bus partagé par langue, retour micro terrain) est une
+//   MATRIX (prioritaire) qui agrège deux flux au niveau BUS, pas au niveau canal :
+//     1. mainRef  -> le Main PGM de la langue (ou le mix salle pour un micro terrain) : ce que la
+//        personne doit entendre en permanence (contient déjà les autres commentateurs de sa langue,
+//        les micros terrain et les PC — inutile de le refaire au niveau canal).
+//     2. un bus TALKBACK dédié à ce retour, dans lequel n'importe quel AUTRE participant du mesh
+//        talkback (privé, un-à-un) peut envoyer sa voix via un send on/off individuel (Companion) —
+//        c'est ce qui permet à A de parler à B sans que C entende, sans dupliquer les sends "programme".
+//   "coveredNames" = les personnes déjà entendues en permanence via mainRef : elles n'ont PAS besoin
+//   d'un send talkback vers ce bus (redondant).
 //
-// Mix ("sends") — DÉFAUT RAISONNABLE, à ajuster si besoin :
-//   - PGM d'une langue reçoit : les commentateurs de cette langue + tous les micros terrain + toutes
-//     les sources PC (jingles/nappes/vidéo entendus à l'antenne).
-//   - Mix salle reçoit : tout le monde (tous commentateurs + tous micros terrain + toutes sources PC).
-//   - Retour perso d'un commentateur reçoit : les AUTRES commentateurs de SA langue (mix-minus, il ne
-//     s'entend pas lui-même) + tous les micros terrain (ambiance). Pas les autres langues, pas les PC.
-//   - Bus partagé par langue reçoit : TOUS les commentateurs de cette langue (y compris eux-mêmes,
-//     puisque c'est un bus commun d'ambiance de régie) + tous les micros terrain.
-//   - Retour d'un micro terrain reçoit : les AUTRES micros terrain (pas de mix-minus sur soi-même).
+// Talkback : TOUJOURS actif pour un commentateur (perso ou bus partagé). Une personne sans aucun
+// retour mais qui veut du talkback (ReturnMode.None, ou micro sans retour) obtient un bus talkback
+// nu, sans mainRef (pas de matrix, juste le bus).
 
 const { ReturnMode, ChannelFormat, WingBusType, BusRole, WING_CAPACITY } = require('./model');
 
@@ -73,47 +71,50 @@ function placeInput(result, sourceName, displayName, slots, cursor, physicalInpu
 function allocateBuses(config, capacity, result) {
   const mainDemands = [];
   const matrixDemands = [];
-  const busDirectDemands = [];
+  const busDirectDemands = [];   // bus talkback dédiés + retours en débordement direct
+  const talkbackBusDemands = []; // toujours dans le pool Bus (jamais Matrix)
 
   const allFieldMicNames = config.fieldMics.map((m) => m.name);
   const allPcNames = config.pcSources.map((p) => p.name);
   const { allCommentators } = require('./model');
 
-  // PGM par langue + salle -> Main. "owner" identifie l'objet modèle propriétaire de CE bus, pour
-  // que l'écran de patch de sortie sache où stocker/lire l'assignation physique (stable même si
-  // le numéro de bus change après un recalcul, contrairement à l'index dans busPlan). "sends"
-  // liste les sources qui alimentent réellement ce bus (mix), distinct de "feeders" qui ne sert
-  // qu'à l'affichage/CSV.
+  // ---- PGM par langue + salle (Main) ----
   for (const lang of config.languages) {
     const commentatorNames = lang.commentators.map((c) => c.name);
     const sends = [...commentatorNames, ...allFieldMicNames, ...allPcNames];
     mainDemands.push({ role: BusRole.LANGUAGE_PROGRAM, format: ChannelFormat.STEREO, name: `PGM ${lang.name}`, feeders: commentatorNames, sends, talkbackNames: [], owner: { kind: 'languagePgm', id: lang.id } });
   }
+
+  let roomMixCoverage = null;
   if (config.roomMixEnabled) {
     const everyone = allCommentators(config).map((c) => c.name);
     const sends = [...everyone, ...allFieldMicNames, ...allPcNames];
+    roomMixCoverage = sends;
     mainDemands.push({ role: BusRole.ROOM_MIX, format: ChannelFormat.STEREO, name: 'Salle', feeders: everyone, sends, talkbackNames: [], owner: { kind: 'roomMix', id: null } });
   }
 
-  const fallbackTalkbackOnly = []; // { name, ownerKind, ownerId }
+  const fallbackTalkbackOnly = []; // { name, ownerKind, ownerId } — pas de mainRef, pas de matrix
 
+  // ---- Retours commentateurs ----
   for (const lang of config.languages) {
+    const langCommentatorNames = lang.commentators.map((c) => c.name);
+    const coveredByPgm = [...langCommentatorNames, ...allFieldMicNames, ...allPcNames];
+    const mainRef = { kind: 'languagePgm', id: lang.id };
+
     for (const c of lang.commentators) {
       switch (c.returnMode) {
         case ReturnMode.PERSONAL_MONO:
         case ReturnMode.PERSONAL_STEREO: {
           const format = c.returnMode === ReturnMode.PERSONAL_MONO ? ChannelFormat.MONO : ChannelFormat.STEREO;
-          const others = lang.commentators.filter((x) => x.id !== c.id).map((x) => x.name);
-          const sends = [...others, ...allFieldMicNames];
-          matrixDemands.push({ role: BusRole.COMMENTATOR_RETURN, format, name: `Ret ${c.name}`, feeders: [c.name], sends, talkbackNames: [c.name], owner: { kind: 'commentatorReturn', id: c.id } });
+          const owner = { kind: 'commentatorReturn', id: c.id };
+          matrixDemands.push({ role: BusRole.COMMENTATOR_RETURN, format, name: `Ret ${c.name}`, feeders: [c.name], sends: [], talkbackNames: [c.name], owner, mainRef, coveredNames: coveredByPgm });
+          talkbackBusDemands.push({ role: BusRole.TALKBACK, format: ChannelFormat.MONO, name: `TB ${c.name}`, feeders: [c.name], sends: [], talkbackNames: [c.name], owner, coveredNames: coveredByPgm });
           break;
         }
         case ReturnMode.SHARED_LANGUAGE_BUS:
-          break; // le bus partagé est créé une fois par langue plus bas, avec ses talkbacks
+          break; // le bus partagé est créé une fois par langue plus bas
         case ReturnMode.NONE:
         default:
-          // Talkback obligatoire malgré tout : même owner (commentatorReturn) que le cas perso,
-          // puisqu'un commentateur n'a jamais les deux à la fois.
           fallbackTalkbackOnly.push({ name: c.name, ownerKind: 'commentatorReturn', ownerId: c.id });
           break;
       }
@@ -122,29 +123,38 @@ function allocateBuses(config, capacity, result) {
     const sharedMembers = lang.commentators.filter((c) => c.returnMode === ReturnMode.SHARED_LANGUAGE_BUS);
     if (sharedMembers.length > 0) {
       const feeders = sharedMembers.map((c) => c.name);
-      const sends = [...feeders, ...allFieldMicNames];
-      busDirectDemands.push({ role: BusRole.COMMENTATOR_RETURN, format: ChannelFormat.STEREO, name: `Ret ${lang.name}`, feeders, sends, talkbackNames: feeders, owner: { kind: 'languageSharedReturn', id: lang.id } });
+      const owner = { kind: 'languageSharedReturn', id: lang.id };
+      matrixDemands.push({ role: BusRole.COMMENTATOR_RETURN, format: ChannelFormat.STEREO, name: `Ret ${lang.name}`, feeders, sends: [], talkbackNames: feeders, owner, mainRef, coveredNames: coveredByPgm });
+      talkbackBusDemands.push({ role: BusRole.TALKBACK, format: ChannelFormat.MONO, name: `TB ${lang.name}`, feeders, sends: [], talkbackNames: feeders, owner, coveredNames: coveredByPgm });
     }
   }
 
+  // ---- Retours micros terrain ----
   for (const mic of config.fieldMics) {
-    const tb = mic.talkbackEnabled ? [mic.name] : [];
     if (mic.hasReturn) {
-      const others = config.fieldMics.filter((x) => x.id !== mic.id).map((x) => x.name);
-      matrixDemands.push({ role: BusRole.FIELD_MIC_RETURN, format: mic.returnFormat, name: `Ret ${mic.name}`, feeders: [mic.name], sends: others, talkbackNames: tb, owner: { kind: 'fieldMicReturn', id: mic.id } });
+      const owner = { kind: 'fieldMicReturn', id: mic.id };
+      const coveredNames = roomMixCoverage || [];
+      const mainRef = config.roomMixEnabled ? { kind: 'roomMix', id: null } : null;
+      const talkbackNames = mic.talkbackEnabled ? [mic.name] : [];
+      matrixDemands.push({ role: BusRole.FIELD_MIC_RETURN, format: mic.returnFormat, name: `Ret ${mic.name}`, feeders: [mic.name], sends: [], talkbackNames, owner, mainRef, coveredNames });
+      if (mic.talkbackEnabled) {
+        talkbackBusDemands.push({ role: BusRole.TALKBACK, format: ChannelFormat.MONO, name: `TB ${mic.name}`, feeders: [mic.name], sends: [], talkbackNames: [mic.name], owner, coveredNames });
+      }
     } else if (mic.talkbackEnabled) {
       fallbackTalkbackOnly.push({ name: mic.name, ownerKind: 'fieldMicReturn', ownerId: mic.id });
     }
   }
 
+  // ---- Talkback nu (pas de retour du tout, mais talkback quand même) ----
   for (const t of fallbackTalkbackOnly) {
-    busDirectDemands.push({ role: BusRole.TALKBACK, format: ChannelFormat.MONO, name: `TB ${t.name}`, feeders: [t.name], sends: [], talkbackNames: [t.name], owner: { kind: t.ownerKind, id: t.ownerId } });
+    busDirectDemands.push({ role: BusRole.TALKBACK, format: ChannelFormat.MONO, name: `TB ${t.name}`, feeders: [t.name], sends: [], talkbackNames: [t.name], owner: { kind: t.ownerKind, id: t.ownerId }, coveredNames: [] });
   }
 
+  // ---- Remplissage : Main puis Matrix (débordement -> Bus), bus talkback dédiés toujours en Bus ----
   const busQueue = [];
   fillPool(result, mainDemands, WingBusType.MAIN, capacity.mainBuses, busQueue);
   fillPool(result, matrixDemands, WingBusType.MATRIX, capacity.matrixBuses, busQueue);
-  busQueue.push(...busDirectDemands);
+  busQueue.push(...talkbackBusDemands, ...busDirectDemands);
 
   fillPool(result, busQueue, WingBusType.BUS, capacity.buses, null);
 
@@ -189,7 +199,8 @@ function fillPool(result, demands, type, capacity, overflow) {
     if (i < capacity) {
       result.busPlan.push({
         role: d.role, busType: type, busNumber: i + 1, format: d.format, name: d.name,
-        feedingSourceNames: d.feeders, sends: d.sends || [], talkbackNames: d.talkbackNames, owner: d.owner,
+        feedingSourceNames: d.feeders, sends: d.sends || [], talkbackNames: d.talkbackNames,
+        owner: d.owner, mainRef: d.mainRef || null, coveredNames: d.coveredNames || [],
       });
     } else if (overflow) {
       overflow.push(d);

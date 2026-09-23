@@ -42,6 +42,11 @@ const Bus = {
   mute: (bus) => `${Bus.node(bus)}/mute`,
   fader: (bus) => `${Bus.node(bus)}/fdr`,
   monoSwitch: (bus) => `${Bus.node(bus)}/busmono`,
+  // Un bus peut alimenter un autre bus ou une matrice (architecture Channel -> Bus -> Matrix).
+  sendOn: (bus, targetBus) => `${Bus.node(bus)}/send/${targetBus}/on`,
+  sendLevel: (bus, targetBus) => `${Bus.node(bus)}/send/${targetBus}/lvl`,
+  matrixSendOn: (bus, mtx) => `${Bus.node(bus)}/send/MX${mtx}/on`,
+  matrixSendLevel: (bus, mtx) => `${Bus.node(bus)}/send/MX${mtx}/lvl`,
 };
 
 const Matrix = {
@@ -60,6 +65,9 @@ const Main = {
   mute: (main) => `${Main.node(main)}/mute`,
   fader: (main) => `${Main.node(main)}/fdr`,
   monoSwitch: (main) => `${Main.node(main)}/busmono`,
+  // Un Main ne peut alimenter qu'une matrice (pas un autre bus) — architecture Wing.
+  matrixSendOn: (main, mtx) => `${Main.node(main)}/send/MX${mtx}/on`,
+  matrixSendLevel: (main, mtx) => `${Main.node(main)}/send/MX${mtx}/lvl`,
 };
 
 module.exports = { Channel, AuxInput, Bus, Matrix, Main };

@@ -5,7 +5,7 @@
 // pour rester sans ambiguïté (contrairement à C#, JS n'a qu'un type "number").
 
 const { Channel, AuxInput, Bus, Matrix, Main } = require('./oscAddresses');
-const { ChannelFormat, WingBusType, WING_INPUT_GROUPS, WING_OUTPUT_GROUPS } = require('./model');
+const { ChannelFormat, WingBusType, BusRole, WING_INPUT_GROUPS, WING_OUTPUT_GROUPS } = require('./model');
 
 function i(value) { return { type: 'i', value }; }
 function f(value) { return { type: 'f', value }; }
@@ -39,9 +39,11 @@ function buildMessages(plan) {
   const inputBySourceName = new Map(plan.inputPlan.map((row) => [row.sourceName, row]));
 
   for (const input of plan.inputPlan) addInputMessages(messages, input);
+
   for (const bus of plan.busPlan) {
     addBusMessages(messages, bus);
-    addProgramSends(messages, bus, inputBySourceName);
+    addProgramSends(messages, bus, inputBySourceName);   // PGM / mix salle : contenu direct des canaux
+    addAggregationSends(messages, bus, plan);            // retours : agrégation Main/Bus -> Matrix/Bus
   }
   addTalkbackMeshMessages(messages, plan, inputBySourceName);
 
@@ -64,8 +66,8 @@ function addInputMessages(messages, input) {
       messages.push({ address: addr.inputConnectionIndex(chOrAux), args: [i(input.physicalInput.index + n)] });
     }
 
-    // Utilise sourceName (identité courte, ex. "FR-Comm1") plutôt que displayName (ex. "FR-Comm1
-    // (FR)", réservé à l'UI) pour éviter une troncature disgracieuse sur la scribble strip.
+    // sourceName (identité courte, ex. "FR-Comm1") plutôt que displayName (ex. "FR-Comm1 (FR)",
+    // réservé à l'UI) pour éviter une troncature disgracieuse sur la scribble strip.
     const label = truncateName(input.slotCount > 1 ? `${input.sourceName} ${n === 0 ? 'L' : 'R'}` : input.sourceName);
     messages.push({ address: addr.name(chOrAux), args: [s(label)] });
 
@@ -84,10 +86,8 @@ function addBusMessages(messages, bus) {
   }
 
   // Patch de sortie AVANT le nommage (même raisonnement que pour les entrées, voir addInputMessages).
-  // EXPÉRIMENTAL : contrairement au patch d'entrée (/ch/N/in/conn/...), aucune source publique (ni
-  // doc officielle, ni module Companion open-source) ne documente l'adresse de routage d'un
-  // bus/matrix/main vers un port de sortie physique. L'adresse ci-dessous est une supposition par
-  // symétrie avec l'entrée — à vérifier/corriger en priorité une fois connecté à la console réelle.
+  // EXPÉRIMENTAL : aucune source publique ne documente l'adresse de routage d'un bus/matrix/main
+  // vers un port de sortie physique — supposition par symétrie avec l'entrée, à vérifier.
   if (bus.physicalOutput) {
     messages.push({ address: `${nodeAddr}/out/conn/grp`, args: [s(WING_OUTPUT_GROUPS[bus.physicalOutput.group].oscCode)] });
     messages.push({ address: `${nodeAddr}/out/conn/in`, args: [i(bus.physicalOutput.index)] });
@@ -98,35 +98,90 @@ function addBusMessages(messages, bus) {
   messages.push({ address: monoAddr, args: [i(bus.format === ChannelFormat.MONO ? 1 : 0)] });
 }
 
-/** Envoie réellement le contenu du mix (bus.sends, calculé par l'allocateur : PGM, mix salle,
- * mix-minus des retours...) — c'est ce qui manquait pour que les bus/matrices/mains portent du son. */
+/** Envoie le contenu direct des bus PGM / mix salle (bus.sends, calculé par l'allocateur) : ce sont
+ * les seuls bus alimentés canal par canal — les retours sont agrégés au niveau bus (voir plus bas). */
 function addProgramSends(messages, bus, inputBySourceName) {
   for (const sourceName of bus.sends) {
     const input = inputBySourceName.get(sourceName);
     if (!input) continue;
     for (let n = 0; n < input.slotCount; n++) {
-      const { onAddr, levelAddr } = resolveSendAddresses(input.firstSlot + n, bus);
+      const { onAddr, levelAddr } = resolveChannelSendAddresses(input.firstSlot + n, bus);
       messages.push({ address: onAddr, args: [i(1)] });
       messages.push({ address: levelAddr, args: [f(0.0)] });
     }
   }
 }
 
-/** Prépare, pour chaque bus de retour d'un participant, un send coupé (off) depuis le canal de
- * chaque AUTRE participant — prêt à être basculé on/off en direct par un bouton Stream Deck/Companion.
- * Les participants déjà entendus en permanence via bus.sends (mix-minus normal) sont ignorés : pas
- * besoin d'un talkback pour quelqu'un qu'on entend déjà tout le temps sur ce bus. */
+/** Agrège, pour un bus de retour, deux flux au niveau BUS (pas canal) :
+ *   - mainRef : le Main PGM (ou le mix salle) déjà rempli — toujours actif.
+ *   - le bus talkback dédié à ce retour (même owner, role TALKBACK) — toujours actif ; c'est CE bus
+ *     qui reçoit le mesh privé un-à-un (voir addTalkbackMeshMessages), pas la matrix directement. */
+function addAggregationSends(messages, bus, plan) {
+  if (bus.mainRef) {
+    const source = findBusByOwner(plan, bus.mainRef);
+    const addrs = source && resolveInterBusSendAddresses(source, bus);
+    if (addrs) {
+      messages.push({ address: addrs.onAddr, args: [i(1)] });
+      messages.push({ address: addrs.levelAddr, args: [f(0.0)] });
+    }
+  }
+
+  if (bus.role === BusRole.COMMENTATOR_RETURN || bus.role === BusRole.FIELD_MIC_RETURN) {
+    const talkBus = plan.busPlan.find((b) => b.role === BusRole.TALKBACK && sameOwner(b.owner, bus.owner));
+    const addrs = talkBus && resolveInterBusSendAddresses(talkBus, bus);
+    if (addrs) {
+      messages.push({ address: addrs.onAddr, args: [i(1)] });
+      messages.push({ address: addrs.levelAddr, args: [f(0.0)] });
+    }
+  }
+}
+
+function findBusByOwner(plan, ownerRef) {
+  return plan.busPlan.find((b) => sameOwner(b.owner, ownerRef)) || null;
+}
+
+function sameOwner(a, b) {
+  return !!a && !!b && a.kind === b.kind && a.id === b.id;
+}
+
+/** Résout l'adresse d'un send BUS -> BUS ou BUS -> MATRIX ou MAIN -> MATRIX. MAIN -> BUS n'existe
+ * pas sur la Wing (un Main ne peut alimenter qu'une matrice) — retourne null dans ce cas, dégradé
+ * silencieusement (arrive seulement si un PGM déborde du pool Main vers le pool Bus). */
+function resolveInterBusSendAddresses(source, target) {
+  if (source.busType === WingBusType.MAIN) {
+    if (target.busType === WingBusType.MATRIX) {
+      return { onAddr: Main.matrixSendOn(source.busNumber, target.busNumber), levelAddr: Main.matrixSendLevel(source.busNumber, target.busNumber) };
+    }
+    return null; // Main -> Bus non supporté
+  }
+  if (source.busType === WingBusType.BUS) {
+    if (target.busType === WingBusType.MATRIX) {
+      return { onAddr: Bus.matrixSendOn(source.busNumber, target.busNumber), levelAddr: Bus.matrixSendLevel(source.busNumber, target.busNumber) };
+    }
+    if (target.busType === WingBusType.BUS) {
+      return { onAddr: Bus.sendOn(source.busNumber, target.busNumber), levelAddr: Bus.sendLevel(source.busNumber, target.busNumber) };
+    }
+  }
+  return null;
+}
+
+/** Pour chaque bus TALKBACK (dédié à un retour, ou nu si la personne n'a pas de retour), prépare un
+ * send coupé (off) depuis le canal de chaque AUTRE participant du mesh — sauf ceux déjà entendus en
+ * permanence via mainRef (coveredNames) ou qui SONT ce bus (talkbackNames). Un bouton Stream Deck /
+ * Companion bascule ensuite ce send on/off en direct : c'est ce qui permet le privé un-à-un. */
 function addTalkbackMeshMessages(messages, plan, inputBySourceName) {
   const allParticipants = [...new Set(plan.busPlan.flatMap((b) => b.talkbackNames))];
   if (allParticipants.length < 2) return;
 
-  for (const bus of plan.busPlan.filter((b) => b.talkbackNames.length > 0)) {
-    const speakers = allParticipants.filter((name) => !bus.talkbackNames.includes(name) && !bus.sends.includes(name));
+  for (const bus of plan.busPlan.filter((b) => b.role === BusRole.TALKBACK)) {
+    const excluded = new Set([...bus.talkbackNames, ...bus.coveredNames]);
+    const speakers = allParticipants.filter((name) => !excluded.has(name));
+
     for (const speaker of speakers) {
       const input = inputBySourceName.get(speaker);
       if (!input) continue;
       for (let n = 0; n < input.slotCount; n++) {
-        const { onAddr, levelAddr } = resolveSendAddresses(input.firstSlot + n, bus);
+        const { onAddr, levelAddr } = resolveChannelSendAddresses(input.firstSlot + n, bus);
         messages.push({ address: onAddr, args: [i(0)] });
         messages.push({ address: levelAddr, args: [f(0.0)] });
       }
@@ -134,7 +189,7 @@ function addTalkbackMeshMessages(messages, plan, inputBySourceName) {
   }
 }
 
-function resolveSendAddresses(slot, destination) {
+function resolveChannelSendAddresses(slot, destination) {
   const isAux = slot > 40;
   const chOrAux = isAux ? slot - 40 : slot;
   const src = isAux ? AuxInput : Channel;

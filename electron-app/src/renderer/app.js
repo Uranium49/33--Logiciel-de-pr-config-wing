@@ -8,6 +8,7 @@ const M = require('../core/model');
 const { allocate } = require('../core/allocator');
 const { buildMessages } = require('../core/scenePlanner');
 const { buildOscScriptText, buildPatchCsvText } = require('../core/exporter');
+const { describeBusMix } = require('../core/describe');
 const oscClient = require('../core/oscClient');
 
 // ---------------------------------------------------------------------------
@@ -255,7 +256,7 @@ function renderPlanTables() {
   const busRows = plan.busPlan.map((b) => `
     <tr>
       <td>${b.busType}</td><td>${b.busNumber}</td><td>${esc(b.name)}</td><td>${b.format}</td>
-      <td>${esc(b.sends.join(', ') || '—')}</td>
+      <td>${esc(describeBusMix(b, plan))}</td>
       <td>${esc(b.talkbackNames.join(', ') || '—')}</td>
     </tr>
   `).join('') || '<tr><td colspan="6" class="empty-hint">Aucun bus</td></tr>';
