@@ -39,6 +39,7 @@ const WingIoGroup = {
   STAGECONNECT: 'stageconnect',
   USB_AUDIO: 'usbAudio',
   USB_PLAYER: 'usbPlayer',
+  OSCILLATOR: 'oscillator',
 };
 
 // Codes de groupe : "LCL" et "A"/"B" CONFIRMÉS par observation directe sur console réelle (journal
@@ -58,6 +59,10 @@ const WING_INPUT_GROUPS = {
   [WingIoGroup.STAGECONNECT]: { oscCode: 'ST', label: 'StageConnect', count: 32 },
   [WingIoGroup.USB_AUDIO]: { oscCode: 'USBA', label: 'USB Audio (PC)', count: 48 },
   [WingIoGroup.USB_PLAYER]: { oscCode: 'USBP', label: 'USB Player', count: 4 },
+  // Générateur de test interne (confirmé comme groupe source par la doc marketing officielle : "11
+  // input sources: Local, Aux In, AES/EBU, Oscillator, ..."), mais ni son code OSC ni ses paramètres
+  // de forme d'onde/niveau ne sont documentés publiquement — tout est expérimental ici.
+  [WingIoGroup.OSCILLATOR]: { oscCode: 'OSC', label: 'Oscillateur (test)', count: 1 },
 };
 
 // Sorties : mêmes réseaux que les entrées, sauf Local (8 XLR out sur le Rack, pas 24) et pas de
@@ -81,6 +86,15 @@ const WING_CAPACITY = {
   matrixBuses: 8,   // /mtx/1-8
   buses: 16,        // /bus/1-16
   automixGroups: 2, // gain-sharing sur max 16 canaux chacun (doc officielle Wing)
+
+  // Zones fixes de rangement des entrées, demandées explicitement : toujours les mêmes emplacements
+  // d'une prod à l'autre, même si une zone n'est pas entièrement remplie (l'espace non utilisé reste
+  // réservé, il n'est jamais récupéré par la zone suivante — prévisibilité pour l'opérateur).
+  inputZones: {
+    casters: { start: 1, end: 8 },     // commentateurs + ingé son + pistes de référence automix
+    ambiances: { start: 9, end: 32 },  // micros terrain
+    pc: { start: 33, end: 48 },        // sources PC : canaux 33-40 puis aux 1-8 (slots 41-48)
+  },
 };
 
 let idCounter = 1;

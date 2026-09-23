@@ -93,4 +93,13 @@ const IoOutput = {
   color: (groupCode, index) => `${IoOutput.node(groupCode, index)}/col`,
 };
 
-module.exports = { Channel, AuxInput, Bus, Matrix, Main, IoInput, IoOutput };
+// Générateur de test interne (bruit rose/blanc/sinus). EXPÉRIMENTAL : la doc marketing confirme
+// juste l'existence d'"Oscillator" comme source patchable ; ni l'adresse de configuration (forme
+// d'onde, niveau) ni sa structure exacte ne sont documentées publiquement. Suppose un sous-nœud
+// /cfg/osc/... par cohérence avec les autres réglages globaux observés (/cfg/rta/..., /cfg/mtr/...).
+const Oscillator = {
+  wave: () => '/cfg/osc/wave',
+  level: () => '/cfg/osc/lvl',
+};
+
+module.exports = { Channel, AuxInput, Bus, Matrix, Main, IoInput, IoOutput, Oscillator };

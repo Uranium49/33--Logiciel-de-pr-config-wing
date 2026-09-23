@@ -4,8 +4,10 @@
 //   - entier -> { type: 'i', value } / flottant -> { type: 'f', value } / chaîne -> { type: 's', value }
 // pour rester sans ambiguïté (contrairement à C#, JS n'a qu'un type "number").
 
-const { Channel, AuxInput, Bus, Matrix, Main, IoInput, IoOutput } = require('./oscAddresses');
+const { Channel, AuxInput, Bus, Matrix, Main, IoInput, IoOutput, Oscillator } = require('./oscAddresses');
 const { ChannelFormat, WingBusType, BusRole, WING_INPUT_GROUPS, WING_OUTPUT_GROUPS } = require('./model');
+
+const AUTOMIX_REF_LEVEL_DB = -10.0;
 
 function i(value) { return { type: 'i', value }; }
 function f(value) { return { type: 'f', value }; }
@@ -18,6 +20,7 @@ const CHANNEL_STYLE = {
   fieldMic: { col: 9, icon: 100 },     // Rouge, micro générique
   pcSource: { col: 14, icon: null },   // Bleu clair, pas d'icône dédiée confirmée
   engineer: { col: 7, icon: 100 },     // Jaune, micro générique
+  automixRef: { col: 12, icon: null }, // Violet, piste technique
 };
 const BUS_COLOR_PALETTE = [2, 5, 7, 11, 13, 16, 4, 9, 15, 6]; // rotation de couleurs distinctes
 
@@ -38,6 +41,15 @@ function truncateName(name) {
 function buildMessages(plan) {
   const messages = [];
   const inputBySourceName = new Map(plan.inputPlan.map((row) => [row.sourceName, row]));
+
+  const hasAutomixRef = plan.inputPlan.some((row) => row.kind === 'automixRef');
+  if (hasAutomixRef) {
+    // Réglage global du générateur — EXPÉRIMENTAL, voir oscAddresses.Oscillator. Une seule fois,
+    // pas par piste : sur la Wing comme sur la plupart des consoles de cette famille, l'oscillateur
+    // est un générateur unique partagé, pas une instance par canal patché sur lui.
+    messages.push({ address: Oscillator.wave(), args: [s('PINK')] });
+    messages.push({ address: Oscillator.level(), args: [f(AUTOMIX_REF_LEVEL_DB)] });
+  }
 
   for (const input of plan.inputPlan) addInputMessages(messages, input);
 
@@ -82,6 +94,12 @@ function addInputMessages(messages, input) {
     // adresse non confirmée — voir oscAddresses.js). Uniquement sur les 40 canaux principaux.
     if (input.automixGroup && !isAux) {
       messages.push({ address: Channel.autoMixGroup(chOrAux), args: [i(input.automixGroup)] });
+    }
+
+    // Piste de référence automix : fader à -10dB, ne sort dans AUCUN bus/main/matrix (pas de sends —
+    // c'est volontairement une entrée "morte" en dehors de sa fonction de calibration/gain-sharing).
+    if (input.kind === 'automixRef') {
+      messages.push({ address: addr.fader(chOrAux), args: [f(AUTOMIX_REF_LEVEL_DB)] });
     }
 
     // Nomme/colore AUSSI la source physique elle-même (pas seulement le channel) — CONFIRMÉ par
