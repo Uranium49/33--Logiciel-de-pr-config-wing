@@ -10,6 +10,8 @@ const { ChannelFormat, WingBusType, BusRole, WING_INPUT_GROUPS, WING_OUTPUT_GROU
 const AUTOMIX_REF_LEVEL_DB = -10.0;
 // Seuls 2 groupes existent sur la Wing (doc officielle) -> "AUTO_X"/"AUTO_Y", confirmés en écoute.
 const AUTOMIX_POSTINS_MODE = { 1: 'AUTO_X', 2: 'AUTO_Y' };
+// CONFIRMÉ en écoute : valeurs exactes attendues par /io/out/{grp}/{idx}/grp.
+const OUTPUT_SOURCE_TYPE = { [WingBusType.MAIN]: 'MAIN', [WingBusType.BUS]: 'BUS', [WingBusType.MATRIX]: 'MTX' };
 
 function i(value) { return { type: 'i', value }; }
 function f(value) { return { type: 'f', value }; }
@@ -134,23 +136,29 @@ function addInputMessages(messages, input) {
 }
 
 function addBusMessages(messages, bus) {
-  let nameAddr, colorAddr, monoAddr, nodeAddr;
+  let nameAddr, colorAddr, monoAddr;
   switch (bus.busType) {
-    case WingBusType.MAIN: nodeAddr = Main.node(bus.busNumber); nameAddr = Main.name(bus.busNumber); colorAddr = Main.color(bus.busNumber); monoAddr = Main.monoSwitch(bus.busNumber); break;
-    case WingBusType.MATRIX: nodeAddr = Matrix.node(bus.busNumber); nameAddr = Matrix.name(bus.busNumber); colorAddr = Matrix.color(bus.busNumber); monoAddr = Matrix.monoSwitch(bus.busNumber); break;
-    case WingBusType.BUS: nodeAddr = Bus.node(bus.busNumber); nameAddr = Bus.name(bus.busNumber); colorAddr = Bus.color(bus.busNumber); monoAddr = Bus.monoSwitch(bus.busNumber); break;
+    case WingBusType.MAIN: nameAddr = Main.name(bus.busNumber); colorAddr = Main.color(bus.busNumber); monoAddr = Main.monoSwitch(bus.busNumber); break;
+    case WingBusType.MATRIX: nameAddr = Matrix.name(bus.busNumber); colorAddr = Matrix.color(bus.busNumber); monoAddr = Matrix.monoSwitch(bus.busNumber); break;
+    case WingBusType.BUS: nameAddr = Bus.name(bus.busNumber); colorAddr = Bus.color(bus.busNumber); monoAddr = Bus.monoSwitch(bus.busNumber); break;
     default: throw new Error(`Type de bus inconnu: ${bus.busType}`);
   }
 
   // Patch de sortie AVANT le nommage (même raisonnement que pour les entrées, voir addInputMessages).
-  // EXPÉRIMENTAL : contrairement à IoInput (confirmé sur console réelle), rien ne confirme l'existence
-  // ni l'adresse de /io/out/... ou de /main-matrix-bus/N/out/conn/... — supposition par symétrie.
+  // CONFIRMÉ par observation directe : l'architecture est INVERSÉE par rapport à l'entrée — c'est le
+  // PORT PHYSIQUE de sortie qui choisit sa source (/io/out/{grp}/{idx}/grp = "MAIN"/"BUS"/"MTX",
+  // /in = le NUMÉRO de ce bus/main/matrix), pas notre bus qui déclare une destination physique.
   if (bus.physicalOutput) {
     const outGroupCode = WING_OUTPUT_GROUPS[bus.physicalOutput.group].oscCode;
-    messages.push({ address: `${nodeAddr}/out/conn/grp`, args: [s(outGroupCode)] });
-    messages.push({ address: `${nodeAddr}/out/conn/in`, args: [i(bus.physicalOutput.index)] });
-    messages.push({ address: IoOutput.name(outGroupCode, bus.physicalOutput.index), args: [s(truncateName(bus.name))] });
-    messages.push({ address: IoOutput.color(outGroupCode, bus.physicalOutput.index), args: [i(colorForBusName(bus.name))] });
+    const sourceType = OUTPUT_SOURCE_TYPE[bus.busType];
+    const slotCount = bus.format === ChannelFormat.MONO ? 1 : 2;
+    for (let n = 0; n < slotCount; n++) {
+      const idx = bus.physicalOutput.index + n;
+      messages.push({ address: IoOutput.sourceType(outGroupCode, idx), args: [s(sourceType)] });
+      messages.push({ address: IoOutput.sourceNumber(outGroupCode, idx), args: [i(bus.busNumber)] });
+      messages.push({ address: IoOutput.name(outGroupCode, idx), args: [s(truncateName(bus.name))] });
+      messages.push({ address: IoOutput.color(outGroupCode, idx), args: [i(colorForBusName(bus.name))] });
+    }
   }
 
   messages.push({ address: nameAddr, args: [s(truncateName(bus.name))] });
@@ -306,7 +314,6 @@ function buildClearAllMessages(capacity) {
     }
   }
   for (let bus = 1; bus <= capacity.buses; bus++) {
-    messages.push({ address: `${Bus.node(bus)}/out/conn/grp`, args: [s('OFF')] });
     messages.push({ address: Bus.name(bus), args: [s('')] });
     messages.push({ address: Bus.color(bus), args: [i(DEFAULT_COLOR)] });
     // CONFIRMÉ : un bus a par défaut son send vers Main 1 activé -- on le coupe explicitement.
@@ -315,14 +322,21 @@ function buildClearAllMessages(capacity) {
     }
   }
   for (let mtx = 1; mtx <= capacity.matrixBuses; mtx++) {
-    messages.push({ address: `${Matrix.node(mtx)}/out/conn/grp`, args: [s('OFF')] });
     messages.push({ address: Matrix.name(mtx), args: [s('')] });
     messages.push({ address: Matrix.color(mtx), args: [i(DEFAULT_COLOR)] });
   }
   for (let main = 1; main <= capacity.mainBuses; main++) {
-    messages.push({ address: `${Main.node(main)}/out/conn/grp`, args: [s('OFF')] });
     messages.push({ address: Main.name(main), args: [s('')] });
     messages.push({ address: Main.color(main), args: [i(DEFAULT_COLOR)] });
+  }
+
+  // Patch de SORTIE : architecture inversée (voir addBusMessages) -- c'est le port physique de
+  // sortie qui déclare sa source, donc pour tout débrancher il faut balayer tous les ports de
+  // sortie physiques possibles (pas les bus/main/matrix, qui n'ont pas cette notion côté sortie).
+  for (const meta of Object.values(WING_OUTPUT_GROUPS)) {
+    for (let idx = 1; idx <= meta.count; idx++) {
+      messages.push({ address: IoOutput.sourceType(meta.oscCode, idx), args: [s('OFF')] });
+    }
   }
 
   return messages;

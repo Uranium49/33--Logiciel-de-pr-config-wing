@@ -96,11 +96,17 @@ const IoInput = {
   mode: (groupCode, index) => `${IoInput.node(groupCode, index)}/mode`,
 };
 
-// Sortie physique/réseau — EXPÉRIMENTAL, par symétrie avec IoInput (non observé/confirmé).
+// Sortie physique/réseau. CONFIRMÉ par observation directe : l'architecture est INVERSÉE par
+// rapport à l'entrée — c'est le PORT PHYSIQUE de sortie qui choisit sa source interne, pas le
+// bus/main/matrix qui choisit sa destination physique. /io/out/{grp}/{idx}/grp vaut "MAIN"/"BUS"/
+// "MTX" (quel TYPE alimente ce port), et /io/out/{grp}/{idx}/in porte le NUMÉRO (1-based) de ce
+// bus/main/matrix au sein de son type — pas un port physique comme sur l'entrée.
 const IoOutput = {
   node: (groupCode, index) => `/io/out/${groupCode}/${index}`,
   name: (groupCode, index) => `${IoOutput.node(groupCode, index)}/name`,
   color: (groupCode, index) => `${IoOutput.node(groupCode, index)}/col`,
+  sourceType: (groupCode, index) => `${IoOutput.node(groupCode, index)}/grp`,
+  sourceNumber: (groupCode, index) => `${IoOutput.node(groupCode, index)}/in`,
 };
 
 // Générateur de test interne (bruit rose/blanc/sinus). EXPÉRIMENTAL : la doc marketing confirme
