@@ -5,7 +5,7 @@
 // pour rester sans ambiguïté (contrairement à C#, JS n'a qu'un type "number").
 
 const { Channel, AuxInput, Bus, Matrix, Main } = require('./oscAddresses');
-const { ChannelFormat, WingBusType, WING_INPUT_GROUPS } = require('./model');
+const { ChannelFormat, WingBusType, WING_INPUT_GROUPS, WING_OUTPUT_GROUPS } = require('./model');
 
 function i(value) { return { type: 'i', value }; }
 function f(value) { return { type: 'f', value }; }
@@ -52,6 +52,19 @@ function addBusMessages(messages, bus) {
 
   messages.push({ address: nameAddr, args: [s(bus.name)] });
   messages.push({ address: monoAddr, args: [i(bus.format === ChannelFormat.MONO ? 1 : 0)] });
+
+  // Patch de sortie (écran "Patch physique", section Sorties). EXPÉRIMENTAL : contrairement au
+  // patch d'entrée (/ch/N/in/conn/...), aucune source publique (ni doc officielle, ni module
+  // Companion open-source) ne documente l'adresse de routage d'un bus/matrix/main vers un port de
+  // sortie physique. L'adresse ci-dessous est une supposition par symétrie avec l'entrée — à
+  // vérifier/corriger en priorité une fois connecté à la console réelle.
+  if (bus.physicalOutput) {
+    const nodeAddr = bus.busType === WingBusType.MAIN ? Main.node(bus.busNumber)
+      : bus.busType === WingBusType.MATRIX ? Matrix.node(bus.busNumber)
+      : Bus.node(bus.busNumber);
+    messages.push({ address: `${nodeAddr}/out/conn/grp`, args: [s(WING_OUTPUT_GROUPS[bus.physicalOutput.group].oscCode)] });
+    messages.push({ address: `${nodeAddr}/out/conn/in`, args: [i(bus.physicalOutput.index)] });
+  }
 }
 
 /** Prépare, pour chaque bus de retour d'un participant, un send coupé (off) depuis le canal de

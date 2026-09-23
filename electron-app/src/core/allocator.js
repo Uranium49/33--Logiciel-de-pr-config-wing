@@ -69,32 +69,36 @@ function allocateBuses(config, capacity, result) {
   const matrixDemands = [];
   const busDirectDemands = [];
 
-  // PGM par langue + salle -> Main
+  // PGM par langue + salle -> Main. "owner" identifie l'objet modèle propriétaire de CE bus, pour
+  // que l'écran de patch de sortie sache où stocker/lire l'assignation physique (stable même si
+  // le numéro de bus change après un recalcul, contrairement à l'index dans busPlan).
   for (const lang of config.languages) {
     const feeders = lang.commentators.map((c) => c.name);
-    mainDemands.push({ role: BusRole.LANGUAGE_PROGRAM, format: ChannelFormat.STEREO, name: `PGM ${lang.name}`, feeders, talkbackNames: [] });
+    mainDemands.push({ role: BusRole.LANGUAGE_PROGRAM, format: ChannelFormat.STEREO, name: `PGM ${lang.name}`, feeders, talkbackNames: [], owner: { kind: 'languagePgm', id: lang.id } });
   }
   if (config.roomMixEnabled) {
     const { allCommentators } = require('./model');
-    mainDemands.push({ role: BusRole.ROOM_MIX, format: ChannelFormat.STEREO, name: 'Salle', feeders: allCommentators(config).map((c) => c.name), talkbackNames: [] });
+    mainDemands.push({ role: BusRole.ROOM_MIX, format: ChannelFormat.STEREO, name: 'Salle', feeders: allCommentators(config).map((c) => c.name), talkbackNames: [], owner: { kind: 'roomMix', id: null } });
   }
 
-  const namesWithoutOwnReturnButWantTalkback = [];
+  const fallbackTalkbackOnly = []; // { name, ownerKind, ownerId }
 
   for (const lang of config.languages) {
     for (const c of lang.commentators) {
       switch (c.returnMode) {
         case ReturnMode.PERSONAL_MONO:
-          matrixDemands.push({ role: BusRole.COMMENTATOR_RETURN, format: ChannelFormat.MONO, name: `Ret ${c.name}`, feeders: [c.name], talkbackNames: [c.name] });
+          matrixDemands.push({ role: BusRole.COMMENTATOR_RETURN, format: ChannelFormat.MONO, name: `Ret ${c.name}`, feeders: [c.name], talkbackNames: [c.name], owner: { kind: 'commentatorReturn', id: c.id } });
           break;
         case ReturnMode.PERSONAL_STEREO:
-          matrixDemands.push({ role: BusRole.COMMENTATOR_RETURN, format: ChannelFormat.STEREO, name: `Ret ${c.name}`, feeders: [c.name], talkbackNames: [c.name] });
+          matrixDemands.push({ role: BusRole.COMMENTATOR_RETURN, format: ChannelFormat.STEREO, name: `Ret ${c.name}`, feeders: [c.name], talkbackNames: [c.name], owner: { kind: 'commentatorReturn', id: c.id } });
           break;
         case ReturnMode.SHARED_LANGUAGE_BUS:
           break; // le bus partagé est créé une fois par langue plus bas, avec ses talkbacks
         case ReturnMode.NONE:
         default:
-          namesWithoutOwnReturnButWantTalkback.push(c.name); // talkback obligatoire malgré tout
+          // Talkback obligatoire malgré tout : même owner (commentatorReturn) que le cas perso,
+          // puisqu'un commentateur n'a jamais les deux à la fois.
+          fallbackTalkbackOnly.push({ name: c.name, ownerKind: 'commentatorReturn', ownerId: c.id });
           break;
       }
     }
@@ -102,21 +106,21 @@ function allocateBuses(config, capacity, result) {
     const sharedMembers = lang.commentators.filter((c) => c.returnMode === ReturnMode.SHARED_LANGUAGE_BUS);
     if (sharedMembers.length > 0) {
       const feeders = sharedMembers.map((c) => c.name);
-      busDirectDemands.push({ role: BusRole.COMMENTATOR_RETURN, format: ChannelFormat.STEREO, name: `Ret ${lang.name}`, feeders, talkbackNames: feeders });
+      busDirectDemands.push({ role: BusRole.COMMENTATOR_RETURN, format: ChannelFormat.STEREO, name: `Ret ${lang.name}`, feeders, talkbackNames: feeders, owner: { kind: 'languageSharedReturn', id: lang.id } });
     }
   }
 
   for (const mic of config.fieldMics) {
     const tb = mic.talkbackEnabled ? [mic.name] : [];
     if (mic.hasReturn) {
-      matrixDemands.push({ role: BusRole.FIELD_MIC_RETURN, format: mic.returnFormat, name: `Ret ${mic.name}`, feeders: [mic.name], talkbackNames: tb });
+      matrixDemands.push({ role: BusRole.FIELD_MIC_RETURN, format: mic.returnFormat, name: `Ret ${mic.name}`, feeders: [mic.name], talkbackNames: tb, owner: { kind: 'fieldMicReturn', id: mic.id } });
     } else if (mic.talkbackEnabled) {
-      namesWithoutOwnReturnButWantTalkback.push(mic.name);
+      fallbackTalkbackOnly.push({ name: mic.name, ownerKind: 'fieldMicReturn', ownerId: mic.id });
     }
   }
 
-  for (const name of namesWithoutOwnReturnButWantTalkback) {
-    busDirectDemands.push({ role: BusRole.TALKBACK, format: ChannelFormat.MONO, name: `TB ${name}`, feeders: [name], talkbackNames: [name] });
+  for (const t of fallbackTalkbackOnly) {
+    busDirectDemands.push({ role: BusRole.TALKBACK, format: ChannelFormat.MONO, name: `TB ${t.name}`, feeders: [t.name], talkbackNames: [t.name], owner: { kind: t.ownerKind, id: t.ownerId } });
   }
 
   const busQueue = [];
@@ -136,6 +140,30 @@ function allocateBuses(config, capacity, result) {
         'Réduis le nombre de retours personnels/talkback, ou passe certains retours en bus partagé par langue.',
     });
   }
+
+  // Recopie la sortie physique déjà choisie par l'utilisateur (écran de patch) sur chaque bus, en
+  // relisant l'objet modèle propriétaire — stable même si la numérotation des bus a changé.
+  for (const bus of result.busPlan) {
+    bus.physicalOutput = resolveOwnerOutput(config, bus.owner);
+  }
+}
+
+function resolveOwnerOutput(config, owner) {
+  if (!owner) return null;
+  switch (owner.kind) {
+    case 'languagePgm': return config.languages.find((l) => l.id === owner.id)?.pgmOutput ?? null;
+    case 'languageSharedReturn': return config.languages.find((l) => l.id === owner.id)?.sharedReturnOutput ?? null;
+    case 'roomMix': return config.roomMixOutput ?? null;
+    case 'commentatorReturn': {
+      for (const lang of config.languages) {
+        const c = lang.commentators.find((x) => x.id === owner.id);
+        if (c) return c.returnOutput ?? null;
+      }
+      return null;
+    }
+    case 'fieldMicReturn': return config.fieldMics.find((m) => m.id === owner.id)?.returnOutput ?? null;
+    default: return null;
+  }
 }
 
 function fillPool(result, demands, type, capacity, overflow) {
@@ -143,7 +171,7 @@ function fillPool(result, demands, type, capacity, overflow) {
     if (i < capacity) {
       result.busPlan.push({
         role: d.role, busType: type, busNumber: i + 1, format: d.format, name: d.name,
-        feedingSourceNames: d.feeders, talkbackNames: d.talkbackNames,
+        feedingSourceNames: d.feeders, talkbackNames: d.talkbackNames, owner: d.owner,
       });
     } else if (overflow) {
       overflow.push(d);

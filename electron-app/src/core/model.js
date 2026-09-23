@@ -24,18 +24,44 @@ const BusRole = {
   TALKBACK: 'talkback',
 };
 
-// Groupes de connexion physique/réseau d'entrée sur la Wing.
-// ATTENTION : les codes OSC exacts n'ont pas pu être vérifiés dans la documentation publique
-// (ni le PDF officiel, ni le module Companion open-source ne les énumèrent). Ce sont les noms
-// standards Wing — à confirmer/ajuster une fois connecté à la console réelle.
-const WingInputGroup = { LOCAL: 'local', AES50_A: 'aes50A', AES50_B: 'aes50B', CARD: 'card', USB: 'usb' };
+// Groupes de connexion physique/réseau, calqués sur le matériel réel WING RACK (24 entrées XLR
+// locales, 8 sorties XLR locales, 3 ports AES50, StageConnect, AES/EBU, USB) — vérifié via les
+// spécifications Behringer publiques (pas d'Aux In/Out 1/4" sur le Rack, contrairement à la Wing
+// complète). ATTENTION : les codes OSC exacts ("oscCode") n'ont pas pu être vérifiés dans la
+// documentation publique (ni le PDF officiel, ni le module Companion open-source ne les
+// énumèrent) — à confirmer/ajuster une fois connecté à la console réelle.
+const WingIoGroup = {
+  LOCAL: 'local',
+  AES50_A: 'aes50A',
+  AES50_B: 'aes50B',
+  AES50_C: 'aes50C',
+  AESEBU: 'aesebu',
+  STAGECONNECT: 'stageconnect',
+  USB_AUDIO: 'usbAudio',
+  USB_PLAYER: 'usbPlayer',
+};
 
 const WING_INPUT_GROUPS = {
-  [WingInputGroup.LOCAL]: { oscCode: 'LCL', label: 'Local (XLR console)' },
-  [WingInputGroup.AES50_A]: { oscCode: 'A50A', label: 'AES50-A' },
-  [WingInputGroup.AES50_B]: { oscCode: 'A50B', label: 'AES50-B' },
-  [WingInputGroup.CARD]: { oscCode: 'CRD', label: "Carte d'extension (Dante...)" },
-  [WingInputGroup.USB]: { oscCode: 'USB', label: 'USB' },
+  [WingIoGroup.LOCAL]: { oscCode: 'LCL', label: 'Local (XLR console)', count: 24 },
+  [WingIoGroup.AES50_A]: { oscCode: 'A50A', label: 'AES50-A', count: 48 },
+  [WingIoGroup.AES50_B]: { oscCode: 'A50B', label: 'AES50-B', count: 48 },
+  [WingIoGroup.AES50_C]: { oscCode: 'A50C', label: 'AES50-C', count: 48 },
+  [WingIoGroup.AESEBU]: { oscCode: 'AESEBU', label: 'AES/EBU', count: 2 },
+  [WingIoGroup.STAGECONNECT]: { oscCode: 'ST', label: 'StageConnect', count: 32 },
+  [WingIoGroup.USB_AUDIO]: { oscCode: 'USBA', label: 'USB Audio (PC)', count: 2 },
+  [WingIoGroup.USB_PLAYER]: { oscCode: 'USBP', label: 'USB Player', count: 4 },
+};
+
+// Sorties : mêmes réseaux que les entrées, sauf Local (8 XLR out sur le Rack, pas 24) et pas de
+// "USB Player" en sortie (c'est un lecteur, pas un enregistreur, côté patch de sortie).
+const WING_OUTPUT_GROUPS = {
+  [WingIoGroup.LOCAL]: { oscCode: 'LCL', label: 'Local (XLR console)', count: 8 },
+  [WingIoGroup.AES50_A]: { oscCode: 'A50A', label: 'AES50-A', count: 48 },
+  [WingIoGroup.AES50_B]: { oscCode: 'A50B', label: 'AES50-B', count: 48 },
+  [WingIoGroup.AES50_C]: { oscCode: 'A50C', label: 'AES50-C', count: 48 },
+  [WingIoGroup.AESEBU]: { oscCode: 'AESEBU', label: 'AES/EBU', count: 2 },
+  [WingIoGroup.STAGECONNECT]: { oscCode: 'ST', label: 'StageConnect', count: 32 },
+  [WingIoGroup.USB_AUDIO]: { oscCode: 'USBA', label: 'USB Audio (PC)', count: 2 },
 };
 
 const WING_CAPACITY = {
@@ -50,16 +76,25 @@ function nextId() {
   return `id${idCounter++}`;
 }
 
-function createPhysicalInput(group = WingInputGroup.CARD, index = 1) {
+/** Référence à un port physique/réseau précis (groupe + numéro). null = non patché. */
+function createPhysicalRef(group = WingIoGroup.LOCAL, index = 1) {
   return { group, index };
 }
 
 function createCommentator(name) {
-  return { id: nextId(), name, returnMode: ReturnMode.PERSONAL_STEREO, physicalInput: null };
+  return {
+    id: nextId(), name, returnMode: ReturnMode.PERSONAL_STEREO,
+    physicalInput: null,   // entrée mic
+    returnOutput: null,    // sortie de son bus de retour perso (ou du bus talk-only de secours)
+  };
 }
 
 function createLanguage(name) {
-  return { id: nextId(), name, commentators: [] };
+  return {
+    id: nextId(), name, commentators: [],
+    pgmOutput: null,          // sortie du mix PGM de cette langue
+    sharedReturnOutput: null, // sortie du bus de retour partagé (si des commentateurs l'utilisent)
+  };
 }
 
 function createFieldMic(name) {
@@ -70,6 +105,7 @@ function createFieldMic(name) {
     returnFormat: ChannelFormat.MONO,
     talkbackEnabled: false,
     physicalInput: null,
+    returnOutput: null,
   };
 }
 
@@ -91,6 +127,7 @@ function createProductionConfig() {
     pcSources: [],
     roomMixEnabled: false,
     recordingMultitrackEnabled: false,
+    roomMixOutput: null,
   };
 }
 
@@ -121,8 +158,8 @@ function allCommentators(config) {
 }
 
 module.exports = {
-  ReturnMode, ChannelFormat, PcSourceCategory, PcConnectionType, WingBusType, BusRole, WingInputGroup,
-  WING_INPUT_GROUPS, WING_CAPACITY,
-  createPhysicalInput, createCommentator, createLanguage, createFieldMic, createPcSource,
+  ReturnMode, ChannelFormat, PcSourceCategory, PcConnectionType, WingBusType, BusRole, WingIoGroup,
+  WING_INPUT_GROUPS, WING_OUTPUT_GROUPS, WING_CAPACITY,
+  createPhysicalRef, createCommentator, createLanguage, createFieldMic, createPcSource,
   createProductionConfig, sportMultiLanguageTemplate, allCommentators,
 };

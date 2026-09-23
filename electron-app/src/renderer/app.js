@@ -23,6 +23,8 @@ const state = {
   statusMessage: '',
   plan: null,
   messages: [],
+  patchInputCategory: M.WingIoGroup.LOCAL,
+  patchOutputCategory: M.WingIoGroup.LOCAL,
 };
 state.selectedLanguageId = state.config.languages[0]?.id ?? null;
 
@@ -281,61 +283,160 @@ function renderPlanTables() {
 
 function renderPatchScreen() {
   const el = document.getElementById('screen-patch');
-  const sources = [];
-  for (const lang of state.config.languages) for (const c of lang.commentators) sources.push(c);
-  sources.push(...state.config.fieldMics);
-  sources.push(...state.config.pcSources);
-
-  const bySourceName = new Map(state.plan.inputPlan.map((i) => [i.sourceName, i]));
-
-  const cards = sources.map((src) => {
-    const input = bySourceName.get(src.name);
-    if (!input) return '';
-    if (!src.physicalInput) src.physicalInput = M.createPhysicalInput();
-
-    const slotInfo = input.slotCount > 1
-      ? `Canaux ${input.firstSlot}-${input.firstSlot + input.slotCount - 1} (stéréo)`
-      : `Canal ${input.firstSlot}`;
-
-    return `
-      <div class="patch-card">
-        <div class="name">${esc(input.displayName)}</div>
-        <div class="slots">${slotInfo}</div>
-        <div class="field">
-          <label class="field-label">Groupe de connexion</label>
-          <select data-patch-id="${src.id}" data-patch-field="group">
-            ${Object.entries(M.WING_INPUT_GROUPS).map(([key, meta]) =>
-              `<option value="${key}" ${key === src.physicalInput.group ? 'selected' : ''}>${meta.label}</option>`).join('')}
-          </select>
-        </div>
-        <div class="field">
-          <label class="field-label">Numéro de canal</label>
-          <input type="number" min="1" max="64" data-patch-id="${src.id}" data-patch-field="index" value="${src.physicalInput.index}" />
-        </div>
-      </div>
-    `;
-  }).join('');
+  const inputItems = getInputPatchItems();
+  const outputItems = getOutputPatchItems();
 
   el.innerHTML = `
     <h1 class="page-title">Patch physique</h1>
-    <p class="page-subtitle">Assigne chaque source à son entrée physique/réseau réelle sur la Wing.</p>
+    <p class="page-subtitle">Glisse chaque élément sur son entrée/sortie réelle de la console — comme dans Wing-Edit.</p>
     <div class="patch-note">
-      ⚠️ Les codes de groupe (Local/AES50-A/AES50-B/Carte/USB) sont une estimation basée sur la nomenclature standard Wing — non confirmés sur le matériel réel, à vérifier à la connexion.
+      ⚠️ Les codes de groupe (LCL/A50A/A50B/A50C/AESEBU/ST/USBA/USBP) sont une estimation basée sur la
+      nomenclature standard Wing Rack — non confirmés sur le matériel réel. Le patch de <b>sortie</b>
+      (bus/matrix/main → port physique) est en plus expérimental côté envoi OSC : aucune source
+      publique ne documente cette adresse, à vérifier en priorité à la connexion.
     </div>
-    <div class="patch-grid">${cards || '<div class="empty-hint">Aucune source à patcher — ajoute des commentateurs/micros/sources PC dans l\'onglet Configuration.</div>'}</div>
+
+    ${renderPatchSection('input', 'Entrées', inputItems, M.WING_INPUT_GROUPS, state.patchInputCategory)}
+    ${renderPatchSection('output', 'Sorties', outputItems, M.WING_OUTPUT_GROUPS, state.patchOutputCategory)}
   `;
 }
 
+function renderPatchSection(kind, title, items, groups, currentCategory) {
+  return `
+    <section class="card patch-section">
+      <h2>${title} <span class="hint">glisser-déposer un élément sur une case</span></h2>
+      <div class="patch-layout">
+        <div class="patch-tray">
+          ${items.length
+            ? items.map((it) => patchChipHtml(it, groups)).join('')
+            : '<div class="empty-hint">Aucun élément à patcher.</div>'}
+        </div>
+        <div class="patch-grid-area">
+          <div class="patch-tabs">
+            ${Object.entries(groups).map(([key, meta]) => `
+              <button class="btn small patch-tab ${key === currentCategory ? 'active' : ''}"
+                data-action="select-patch-category" data-kind="${kind}" data-category="${key}">
+                ${esc(meta.label)} <span class="count">${meta.count}</span>
+              </button>
+            `).join('')}
+          </div>
+          <div class="patch-cellgrid">
+            ${renderPatchCells(groups[currentCategory].count, currentCategory, kind, items)}
+          </div>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function patchChipHtml(item, groups) {
+  const ref = item.getRef();
+  const badge = ref
+    ? `${groups[ref.group].label} #${ref.index}${item.stereo ? '–' + (ref.index + 1) : ''}`
+    : 'Non patché';
+  return `
+    <div class="patch-chip ${ref ? 'assigned' : ''}" draggable="true" data-item-key="${item.key}" title="Glisser vers une case">
+      <div class="chip-label">${esc(item.label)}</div>
+      <div class="chip-badge">${esc(badge)}</div>
+    </div>
+  `;
+}
+
+function renderPatchCells(count, category, kind, items) {
+  const byIndex = new Map();
+  for (const item of items) {
+    const ref = item.getRef();
+    if (!ref || ref.group !== category) continue;
+    byIndex.set(ref.index, { item, secondary: false });
+    if (item.stereo) byIndex.set(ref.index + 1, { item, secondary: true });
+  }
+
+  let html = '';
+  for (let idx = 1; idx <= count; idx++) {
+    const occ = byIndex.get(idx);
+    if (occ) {
+      html += `
+        <div class="patch-cell filled ${occ.secondary ? 'secondary' : ''}" data-kind="${kind}" data-category="${category}" data-cell="${idx}">
+          <span class="cellnum">${idx}</span>
+          <span class="celllabel" ${occ.secondary ? '' : `draggable="true" data-item-key="${occ.item.key}"`}>${occ.secondary ? '↳' : esc(occ.item.label)}</span>
+          ${!occ.secondary ? `<span class="cellclear" data-action="clear-patch" data-id="${occ.item.key}" title="Retirer">✕</span>` : ''}
+        </div>`;
+    } else {
+      html += `<div class="patch-cell empty" data-kind="${kind}" data-category="${category}" data-cell="${idx}"><span class="cellnum">${idx}</span></div>`;
+    }
+  }
+  return html;
+}
+
 // ---------------------------------------------------------------------------
-// Entités : source de vérité pour l'attribution des ids
+// Patch : items déplaçables (entrées = sources, sorties = bus/matrix/main)
 // ---------------------------------------------------------------------------
 
-function findSourceById(id) {
-  for (const lang of state.config.languages) {
-    const c = lang.commentators.find((x) => x.id === id);
-    if (c) return c;
+function getInputPatchItems() {
+  const bySourceName = new Map(state.plan.inputPlan.map((i) => [i.sourceName, i]));
+  const items = [];
+
+  const push = (src) => {
+    const input = bySourceName.get(src.name);
+    if (!input) return;
+    items.push({
+      key: `in:${src.id}`,
+      label: input.displayName,
+      stereo: input.slotCount > 1,
+      getRef: () => src.physicalInput,
+      setRef: (ref) => { src.physicalInput = ref; },
+    });
+  };
+
+  for (const lang of state.config.languages) for (const c of lang.commentators) push(c);
+  for (const mic of state.config.fieldMics) push(mic);
+  for (const pc of state.config.pcSources) push(pc);
+  return items;
+}
+
+function getOutputPatchItems() {
+  return state.plan.busPlan.map((bus) => ({
+    key: `out:${bus.busType}:${bus.busNumber}`,
+    label: bus.name,
+    stereo: bus.format === M.ChannelFormat.STEREO,
+    getRef: () => bus.physicalOutput,
+    setRef: (ref) => setOwnerOutput(bus.owner, ref),
+  }));
+}
+
+function setOwnerOutput(owner, ref) {
+  if (!owner) return;
+  switch (owner.kind) {
+    case 'languagePgm': {
+      const lang = state.config.languages.find((l) => l.id === owner.id);
+      if (lang) lang.pgmOutput = ref;
+      break;
+    }
+    case 'languageSharedReturn': {
+      const lang = state.config.languages.find((l) => l.id === owner.id);
+      if (lang) lang.sharedReturnOutput = ref;
+      break;
+    }
+    case 'roomMix':
+      state.config.roomMixOutput = ref;
+      break;
+    case 'commentatorReturn': {
+      for (const lang of state.config.languages) {
+        const c = lang.commentators.find((x) => x.id === owner.id);
+        if (c) { c.returnOutput = ref; return; }
+      }
+      break;
+    }
+    case 'fieldMicReturn': {
+      const mic = state.config.fieldMics.find((m) => m.id === owner.id);
+      if (mic) mic.returnOutput = ref;
+      break;
+    }
   }
-  return state.config.fieldMics.find((x) => x.id === id) || state.config.pcSources.find((x) => x.id === id) || null;
+}
+
+function findPatchItemByKey(key) {
+  return [...getInputPatchItems(), ...getOutputPatchItems()].find((it) => it.key === key) || null;
 }
 
 // ---------------------------------------------------------------------------
@@ -442,6 +543,15 @@ const actions = {
     const ok = await oscClient.testConnection(state.wingHost, state.wingPort, 2000);
     setStatus(ok ? `Connexion OK avec ${state.wingHost}:${state.wingPort}.` : 'Pas de réponse de la console (vérifie IP/réseau).');
   },
+  'select-patch-category': (_id, el) => {
+    if (el.dataset.kind === 'input') state.patchInputCategory = el.dataset.category;
+    else state.patchOutputCategory = el.dataset.category;
+    render();
+  },
+  'clear-patch': (key) => {
+    const item = findPatchItemByKey(key);
+    if (item) { item.setRef(null); render(); }
+  },
   'send-to-wing': async () => {
     recompute();
     if (state.plan.errors.length > 0) {
@@ -489,20 +599,47 @@ document.addEventListener('change', (e) => {
     return;
   }
 
-  // Bindings sur l'écran de patch physique (groupe/index).
-  if (t.dataset.patchId) {
-    const src = findSourceById(t.dataset.patchId);
-    if (!src) return;
-    if (!src.physicalInput) src.physicalInput = M.createPhysicalInput();
-    if (t.dataset.patchField === 'group') src.physicalInput.group = t.value;
-    if (t.dataset.patchField === 'index') src.physicalInput.index = parseInt(t.value, 10) || 1;
-    render();
-    return;
-  }
-
   // Sidebar : hôte/port Wing (pas de re-rendu nécessaire, juste l'état).
   if (t.id === 'wing-host') state.wingHost = t.value;
   if (t.id === 'wing-port') state.wingPort = parseInt(t.value, 10) || oscClient.DEFAULT_PORT;
+});
+
+// Glisser-déposer sur la grille de patch (entrées/sorties). Délégation sur `document` puisque les
+// cases et les puces sont régénérées à chaque render().
+document.addEventListener('dragstart', (e) => {
+  const chip = e.target.closest('[data-item-key]');
+  if (!chip) return;
+  e.dataTransfer.setData('text/plain', chip.dataset.itemKey);
+  e.dataTransfer.effectAllowed = 'move';
+});
+
+document.addEventListener('dragover', (e) => {
+  const cell = e.target.closest('.patch-cell');
+  if (!cell) return;
+  e.preventDefault();
+  cell.classList.add('dragover');
+});
+
+document.addEventListener('dragleave', (e) => {
+  const cell = e.target.closest('.patch-cell');
+  if (cell) cell.classList.remove('dragover');
+});
+
+document.addEventListener('drop', (e) => {
+  const cell = e.target.closest('.patch-cell');
+  if (!cell) return;
+  e.preventDefault();
+  cell.classList.remove('dragover');
+
+  const key = e.dataTransfer.getData('text/plain');
+  const item = findPatchItemByKey(key);
+  if (!item) return;
+
+  // Un item ne peut être déposé que dans la grille de son propre type (entrée sur entrée, sortie sur sortie).
+  if (!key.startsWith(`${cell.dataset.kind}:`)) return;
+
+  item.setRef({ group: cell.dataset.category, index: parseInt(cell.dataset.cell, 10) });
+  render();
 });
 
 document.querySelectorAll('nav.nav button').forEach((btn) => {
