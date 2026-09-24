@@ -17,6 +17,22 @@ function i(value) { return { type: 'i', value }; }
 function f(value) { return { type: 'f', value }; }
 function s(value) { return { type: 's', value }; }
 
+// CONFIRMÉ indirectement (comportement observé) : les paramètres de fader/niveau ("/fdr", "/lvl")
+// de la Wing ne prennent PAS un dB brut en float — c'est un float NORMALISÉ 0.0-1.0, avec le même
+// barème non-linéaire que toute la famille X32/M32 (même moteur audio/OSC, doc officielle Wing
+// écrite par le même auteur — Patrick-Gilles Maillot — que la doc X32). 0.0 = -∞dB, 0.75 = 0dB
+// (unité), 1.0 = +10dB. Ça explique le bug rapporté : on envoyait 0.0 (ou même -10.0, hors plage)
+// en pensant écrire "0dB"/"−10dB" directement, ce qui retombe/clampe à -∞ côté console. Barème
+// standard, largement documenté/répliqué dans l'écosystème (TouchOSC, node-easymidi, etc.).
+function dbToFloat(db) {
+  if (db <= -90) return 0.0;
+  if (db < -60) return (db + 90) / 480;
+  if (db < -30) return (db + 70) / 160;
+  if (db < -10) return (db + 50) / 80;
+  return (db + 30) / 40;
+}
+const UNITY_GAIN = dbToFloat(0.0); // 0.75 — volume "0 dB" par défaut de tous les sends qu'on active.
+
 // Couleurs/icônes par défaut — purement visuelles (palette Wing 1-18, icônes mic 100+ confirmées
 // dans le module Companion). Choix arbitraire mais cohérent, à ajuster si besoin.
 const CHANNEL_STYLE = {
@@ -109,7 +125,7 @@ function addInputMessages(messages, input) {
   // contente pas de "ne rien envoyer" (un résidu de patch d'une précédente prod pourrait laisser
   // cette piste active sur un ancien routage) : on COUPE explicitement tous les sends possibles.
   if (input.kind === 'automixRef') {
-    messages.push({ address: addr.fader(chOrAux), args: [f(AUTOMIX_REF_LEVEL_DB)] });
+    messages.push({ address: addr.fader(chOrAux), args: [f(dbToFloat(AUTOMIX_REF_LEVEL_DB))] });
     for (let m = 1; m <= WING_CAPACITY.mainBuses; m++) {
       messages.push({ address: addr.mainSendOn(chOrAux, m), args: [i(0)] });
     }
@@ -194,7 +210,7 @@ function addProgramSends(messages, bus, inputBySourceName) {
     // Un seul canal par source, même stéréo (voir addInputMessages) — un seul send, pas un par port.
     const { onAddr, levelAddr } = resolveChannelSendAddresses(input.firstSlot, bus);
     messages.push({ address: onAddr, args: [i(1)] });
-    messages.push({ address: levelAddr, args: [f(0.0)] });
+    messages.push({ address: levelAddr, args: [f(UNITY_GAIN)] });
   }
 }
 
@@ -209,7 +225,7 @@ function addAggregationSends(messages, bus, plan) {
     const addrs = source && resolveInterBusSendAddresses(source, bus);
     if (addrs) {
       messages.push({ address: addrs.onAddr, args: [i(1)] });
-      messages.push({ address: addrs.levelAddr, args: [f(0.0)] });
+      messages.push({ address: addrs.levelAddr, args: [f(UNITY_GAIN)] });
     }
   }
 
@@ -218,7 +234,7 @@ function addAggregationSends(messages, bus, plan) {
     const addrs = talkBus && resolveInterBusSendAddresses(talkBus, bus);
     if (addrs) {
       messages.push({ address: addrs.onAddr, args: [i(1)] });
-      messages.push({ address: addrs.levelAddr, args: [f(0.0)] });
+      messages.push({ address: addrs.levelAddr, args: [f(UNITY_GAIN)] });
     }
   }
 }
@@ -269,7 +285,7 @@ function addTalkbackMeshMessages(messages, plan, inputBySourceName) {
       if (!input) continue;
       const { onAddr, levelAddr } = resolveChannelSendAddresses(input.firstSlot, bus);
       messages.push({ address: onAddr, args: [i(0)] });
-      messages.push({ address: levelAddr, args: [f(0.0)] });
+      messages.push({ address: levelAddr, args: [f(UNITY_GAIN)] });
     }
   }
 }
