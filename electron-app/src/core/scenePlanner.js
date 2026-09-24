@@ -24,24 +24,14 @@ function s(value) { return { type: 's', value }; }
 // (unité), 1.0 = +10dB. Ça explique le bug rapporté : on envoyait 0.0 (ou même -10.0, hors plage)
 // en pensant écrire "0dB"/"−10dB" directement, ce qui retombe/clampe à -∞ côté console. Barème
 // standard, largement documenté/répliqué dans l'écosystème (TouchOSC, node-easymidi, etc.).
-function dbToFloatRaw(db) {
+function dbToFloat(db) {
   if (db <= -90) return 0.0;
   if (db < -60) return (db + 90) / 480;
   if (db < -30) return (db + 70) / 160;
   if (db < -10) return (db + 50) / 80;
   return (db + 30) / 40;
 }
-
-// CALIBRATION MATÉRIELLE (mesurée sur console réelle) : le barème X32 "standard" ci-dessus donne
-// 0.75 pour 0dB en théorie, mais la Wing affiche en réalité 0.8dB pour cette valeur — la courbe
-// réelle de la Wing est décalée d'environ +0.8dB par rapport au barème X32 générique repris ici.
-// On compense en ciblant systématiquement (db - CALIBRATION_OFFSET_DB) plutôt que db directement,
-// pour que le 0dB demandé tombe bien sur 0dB affiché. À réajuster si un futur relevé le précise.
-const CALIBRATION_OFFSET_DB = 0.8;
-function dbToFloat(db) {
-  return dbToFloatRaw(db - CALIBRATION_OFFSET_DB);
-}
-const UNITY_GAIN = dbToFloat(0.0); // ~0.73 — volume "0 dB" (calibré) par défaut de tout ce qu'on active.
+const UNITY_GAIN = dbToFloat(0.0); // 0.75 — volume "0 dB" par défaut de tout ce qu'on active.
 
 // Couleurs/icônes par défaut — purement visuelles (palette Wing 1-18, icônes mic 100+ confirmées
 // dans le module Companion). Choix arbitraire mais cohérent, à ajuster si besoin.
