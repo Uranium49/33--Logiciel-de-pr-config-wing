@@ -425,9 +425,12 @@ function getInputPatchItems() {
 // Chaque bus STÉRÉO devient DEUX items indépendants (L et R) — CONFIRMÉ sur la console réelle que
 // chaque port physique de sortie choisit sa propre source, donc L et R peuvent viser des ports
 // complètement différents, pas forcément adjacents. Un bus mono ne donne qu'un seul item.
+// Les bus TALKBACK sont exclus : demandé explicitement, seule la Matrix de retour sort
+// physiquement, le bus talkback reste interne (il n'alimente que la Matrix, jamais une sortie).
 function getOutputPatchItems() {
   const items = [];
   for (const bus of state.plan.busPlan) {
+    if (bus.role === M.BusRole.TALKBACK) continue;
     if (bus.format === M.ChannelFormat.MONO) {
       items.push({
         key: `output:${bus.busType}:${bus.busNumber}:l`,

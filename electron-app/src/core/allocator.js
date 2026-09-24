@@ -265,8 +265,11 @@ function allocateBuses(config, capacity, result) {
 
   // Recopie la sortie physique déjà choisie par l'utilisateur (écran de patch) sur chaque bus, en
   // relisant l'objet modèle propriétaire — stable même si la numérotation des bus a changé.
+  // Les bus TALKBACK partagent leur owner avec le retour qu'ils alimentent (nécessaire pour les
+  // apparier dans addAggregationSends), mais ne sont JAMAIS patchables en sortie eux-mêmes — demandé
+  // explicitement : seule la Matrix de retour sort physiquement, le bus talkback reste interne.
   for (const bus of result.busPlan) {
-    bus.physicalOutput = resolveOwnerOutput(config, bus.owner);
+    bus.physicalOutput = bus.role === BusRole.TALKBACK ? EMPTY_OUTPUT_REF : resolveOwnerOutput(config, bus.owner);
   }
 }
 
