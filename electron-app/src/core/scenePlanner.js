@@ -171,11 +171,11 @@ function addInputMessages(messages, input) {
 }
 
 function addBusMessages(messages, bus) {
-  let nameAddr, colorAddr, monoAddr;
+  let nameAddr, colorAddr, monoAddr, faderAddr;
   switch (bus.busType) {
-    case WingBusType.MAIN: nameAddr = Main.name(bus.busNumber); colorAddr = Main.color(bus.busNumber); monoAddr = Main.monoSwitch(bus.busNumber); break;
-    case WingBusType.MATRIX: nameAddr = Matrix.name(bus.busNumber); colorAddr = Matrix.color(bus.busNumber); monoAddr = Matrix.monoSwitch(bus.busNumber); break;
-    case WingBusType.BUS: nameAddr = Bus.name(bus.busNumber); colorAddr = Bus.color(bus.busNumber); monoAddr = Bus.monoSwitch(bus.busNumber); break;
+    case WingBusType.MAIN: nameAddr = Main.name(bus.busNumber); colorAddr = Main.color(bus.busNumber); monoAddr = Main.monoSwitch(bus.busNumber); faderAddr = Main.fader(bus.busNumber); break;
+    case WingBusType.MATRIX: nameAddr = Matrix.name(bus.busNumber); colorAddr = Matrix.color(bus.busNumber); monoAddr = Matrix.monoSwitch(bus.busNumber); faderAddr = Matrix.fader(bus.busNumber); break;
+    case WingBusType.BUS: nameAddr = Bus.name(bus.busNumber); colorAddr = Bus.color(bus.busNumber); monoAddr = Bus.monoSwitch(bus.busNumber); faderAddr = Bus.fader(bus.busNumber); break;
     default: throw new Error(`Type de bus inconnu: ${bus.busType}`);
   }
 
@@ -206,6 +206,9 @@ function addBusMessages(messages, bus) {
   messages.push({ address: nameAddr, args: [s(truncateName(bus.name))] });
   messages.push({ address: colorAddr, args: [i(colorForBusName(bus.name))] });
   messages.push({ address: monoAddr, args: [i(bus.format === ChannelFormat.MONO ? 1 : 0)] });
+  // Même règle que pour les canaux (voir addInputMessages) : le bus/main/matrix utilisé reçoit aussi
+  // son propre fader à 0dB calibré, indépendamment des sends entrants qui l'alimentent.
+  messages.push({ address: faderAddr, args: [f(UNITY_GAIN)] });
 
   // CONFIRMÉ sur console réelle : un bus /bus/N a par défaut son send vers Main 1 activé. On ne
   // route jamais nos propres bus (retours, talkback) vers un Main dans cette architecture — on coupe
