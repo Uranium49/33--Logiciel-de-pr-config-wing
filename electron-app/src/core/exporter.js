@@ -27,6 +27,13 @@ function csv(value) {
   return str.includes(';') ? `"${str}"` : str;
 }
 
+function describeOutputRef(ref) {
+  const part = (r) => (r ? `${WING_OUTPUT_GROUPS[r.group].label} #${r.index}` : '—');
+  if (!ref || (!ref.l && !ref.r)) return '(non patché)';
+  if (ref.l && !ref.r) return part(ref.l); // mono, ou stéréo pas encore complété
+  return `L:${part(ref.l)} R:${part(ref.r)}`;
+}
+
 function buildPatchCsvText(plan) {
   const lines = ['Type;Numéro;Nom;Format/Slots;Mix (sends réels);Talkback;Patch physique'];
 
@@ -39,9 +46,7 @@ function buildPatchCsvText(plan) {
   }
 
   for (const bus of plan.busPlan) {
-    const outPatch = bus.physicalOutput
-      ? `${WING_OUTPUT_GROUPS[bus.physicalOutput.group].label} #${bus.physicalOutput.index}`
-      : '(non patché)';
+    const outPatch = describeOutputRef(bus.physicalOutput);
     lines.push(`${bus.busType};${bus.busNumber};${csv(bus.name)};${bus.format};` +
       `${csv(describeBusMix(bus, plan))};${csv(bus.talkbackNames.join(', '))};${csv(outPatch)}`);
   }

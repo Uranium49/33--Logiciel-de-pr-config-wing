@@ -422,46 +422,65 @@ function getInputPatchItems() {
   return items;
 }
 
+// Chaque bus STÉRÉO devient DEUX items indépendants (L et R) — CONFIRMÉ sur la console réelle que
+// chaque port physique de sortie choisit sa propre source, donc L et R peuvent viser des ports
+// complètement différents, pas forcément adjacents. Un bus mono ne donne qu'un seul item.
 function getOutputPatchItems() {
-  return state.plan.busPlan.map((bus) => ({
-    key: `output:${bus.busType}:${bus.busNumber}`,
-    label: bus.name,
-    stereo: bus.format === M.ChannelFormat.STEREO,
-    getRef: () => bus.physicalOutput,
-    setRef: (ref) => setOwnerOutput(bus.owner, ref),
-  }));
+  const items = [];
+  for (const bus of state.plan.busPlan) {
+    if (bus.format === M.ChannelFormat.MONO) {
+      items.push({
+        key: `output:${bus.busType}:${bus.busNumber}:l`,
+        label: bus.name,
+        stereo: false,
+        getRef: () => bus.physicalOutput?.l ?? null,
+        setRef: (ref) => setOwnerOutput(bus.owner, 'l', ref),
+      });
+    } else {
+      items.push({
+        key: `output:${bus.busType}:${bus.busNumber}:l`,
+        label: `${bus.name} — L`,
+        stereo: false,
+        getRef: () => bus.physicalOutput?.l ?? null,
+        setRef: (ref) => setOwnerOutput(bus.owner, 'l', ref),
+      });
+      items.push({
+        key: `output:${bus.busType}:${bus.busNumber}:r`,
+        label: `${bus.name} — R`,
+        stereo: false,
+        getRef: () => bus.physicalOutput?.r ?? null,
+        setRef: (ref) => setOwnerOutput(bus.owner, 'r', ref),
+      });
+    }
+  }
+  return items;
 }
 
-function setOwnerOutput(owner, ref) {
+function setOwnerOutput(owner, channel, ref) {
   if (!owner) return;
+  const apply = (obj) => { if (obj) obj[channel] = ref; };
   switch (owner.kind) {
-    case 'languagePgm': {
-      const lang = state.config.languages.find((l) => l.id === owner.id);
-      if (lang) lang.pgmOutput = ref;
+    case 'languagePgm':
+      apply(state.config.languages.find((l) => l.id === owner.id)?.pgmOutput);
       break;
-    }
-    case 'languageSharedReturn': {
-      const lang = state.config.languages.find((l) => l.id === owner.id);
-      if (lang) lang.sharedReturnOutput = ref;
+    case 'languageSharedReturn':
+      apply(state.config.languages.find((l) => l.id === owner.id)?.sharedReturnOutput);
       break;
-    }
     case 'roomMix':
-      state.config.roomMixOutput = ref;
+      apply(state.config.roomMixOutput);
       break;
     case 'commentatorReturn': {
       for (const lang of state.config.languages) {
         const c = lang.commentators.find((x) => x.id === owner.id);
-        if (c) { c.returnOutput = ref; return; }
+        if (c) { apply(c.returnOutput); return; }
       }
       break;
     }
-    case 'fieldMicReturn': {
-      const mic = state.config.fieldMics.find((m) => m.id === owner.id);
-      if (mic) mic.returnOutput = ref;
+    case 'fieldMicReturn':
+      apply(state.config.fieldMics.find((m) => m.id === owner.id)?.returnOutput);
       break;
-    }
     case 'soundEngineer':
-      state.config.soundEngineer.returnOutput = ref;
+      apply(state.config.soundEngineer.returnOutput);
       break;
   }
 }

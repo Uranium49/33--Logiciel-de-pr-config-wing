@@ -270,22 +270,25 @@ function allocateBuses(config, capacity, result) {
   }
 }
 
+// Toujours { l, r } (jamais null) : L et R sont patchables indépendamment (voir createStereoOutputRef).
+const EMPTY_OUTPUT_REF = { l: null, r: null };
+
 function resolveOwnerOutput(config, owner) {
-  if (!owner) return null;
+  if (!owner) return EMPTY_OUTPUT_REF;
   switch (owner.kind) {
-    case 'languagePgm': return config.languages.find((l) => l.id === owner.id)?.pgmOutput ?? null;
-    case 'languageSharedReturn': return config.languages.find((l) => l.id === owner.id)?.sharedReturnOutput ?? null;
-    case 'roomMix': return config.roomMixOutput ?? null;
+    case 'languagePgm': return config.languages.find((l) => l.id === owner.id)?.pgmOutput ?? EMPTY_OUTPUT_REF;
+    case 'languageSharedReturn': return config.languages.find((l) => l.id === owner.id)?.sharedReturnOutput ?? EMPTY_OUTPUT_REF;
+    case 'roomMix': return config.roomMixOutput ?? EMPTY_OUTPUT_REF;
     case 'commentatorReturn': {
       for (const lang of config.languages) {
         const c = lang.commentators.find((x) => x.id === owner.id);
-        if (c) return c.returnOutput ?? null;
+        if (c) return c.returnOutput ?? EMPTY_OUTPUT_REF;
       }
-      return null;
+      return EMPTY_OUTPUT_REF;
     }
-    case 'fieldMicReturn': return config.fieldMics.find((m) => m.id === owner.id)?.returnOutput ?? null;
-    case 'soundEngineer': return config.soundEngineer?.returnOutput ?? null;
-    default: return null;
+    case 'fieldMicReturn': return config.fieldMics.find((m) => m.id === owner.id)?.returnOutput ?? EMPTY_OUTPUT_REF;
+    case 'soundEngineer': return config.soundEngineer?.returnOutput ?? EMPTY_OUTPUT_REF;
+    default: return EMPTY_OUTPUT_REF;
   }
 }
 

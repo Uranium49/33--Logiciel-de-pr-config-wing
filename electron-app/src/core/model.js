@@ -108,19 +108,26 @@ function createPhysicalRef(group = WingIoGroup.LOCAL, index = 1) {
   return { group, index };
 }
 
+/** Sortie physique d'un bus stéréo : L et R sont CONFIRMÉS indépendants sur la Wing (chaque port
+ * physique choisit sa propre source), donc chacun peut être patché sur un port différent, pas
+ * forcément adjacent. Un bus mono n'utilise que .l. */
+function createStereoOutputRef() {
+  return { l: null, r: null };
+}
+
 function createCommentator(name) {
   return {
     id: nextId(), name, returnMode: ReturnMode.PERSONAL_STEREO,
-    physicalInput: null,   // entrée mic
-    returnOutput: null,    // sortie de son bus de retour perso (ou du bus talk-only de secours)
+    physicalInput: null,               // entrée mic
+    returnOutput: createStereoOutputRef(), // sortie de son bus de retour perso (ou du bus talk-only de secours)
   };
 }
 
 function createLanguage(name) {
   return {
     id: nextId(), name, commentators: [],
-    pgmOutput: null,          // sortie du mix PGM de cette langue
-    sharedReturnOutput: null, // sortie du bus de retour partagé (si des commentateurs l'utilisent)
+    pgmOutput: createStereoOutputRef(),          // sortie du mix PGM de cette langue
+    sharedReturnOutput: createStereoOutputRef(), // sortie du bus de retour partagé (si utilisé)
   };
 }
 
@@ -132,7 +139,7 @@ function createFieldMic(name) {
     returnFormat: ChannelFormat.MONO,
     talkbackEnabled: false,
     physicalInput: null,
-    returnOutput: null,
+    returnOutput: createStereoOutputRef(),
   };
 }
 
@@ -150,8 +157,8 @@ function createPcSource(name) {
 function createSoundEngineer(name = 'Ingé son') {
   return {
     id: nextId(), name,
-    physicalInput: null,  // son micro
-    returnOutput: null,   // sortie de sa Matrix de retour (tous les mix)
+    physicalInput: null,                   // son micro
+    returnOutput: createStereoOutputRef(), // sortie de sa Matrix de retour (tous les mix)
   };
 }
 
@@ -163,7 +170,7 @@ function createProductionConfig() {
     pcSources: [],
     roomMixEnabled: false,
     recordingMultitrackEnabled: false,
-    roomMixOutput: null,
+    roomMixOutput: createStereoOutputRef(),
     soundEngineerEnabled: true,
     soundEngineer: createSoundEngineer(),
   };
@@ -198,6 +205,6 @@ function allCommentators(config) {
 module.exports = {
   ReturnMode, ChannelFormat, PcSourceCategory, WingBusType, BusRole, WingIoGroup,
   WING_INPUT_GROUPS, WING_OUTPUT_GROUPS, WING_CAPACITY,
-  createPhysicalRef, createCommentator, createLanguage, createFieldMic, createPcSource,
+  createPhysicalRef, createStereoOutputRef, createCommentator, createLanguage, createFieldMic, createPcSource,
   createSoundEngineer, createProductionConfig, sportMultiLanguageTemplate, allCommentators,
 };

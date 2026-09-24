@@ -147,18 +147,18 @@ function addBusMessages(messages, bus) {
   // Patch de sortie AVANT le nommage (même raisonnement que pour les entrées, voir addInputMessages).
   // CONFIRMÉ par observation directe : l'architecture est INVERSÉE par rapport à l'entrée — c'est le
   // PORT PHYSIQUE de sortie qui choisit sa source (/io/out/{grp}/{idx}/grp = "MAIN"/"BUS"/"MTX",
-  // /in = le NUMÉRO de ce bus/main/matrix), pas notre bus qui déclare une destination physique.
-  if (bus.physicalOutput) {
-    const outGroupCode = WING_OUTPUT_GROUPS[bus.physicalOutput.group].oscCode;
-    const sourceType = OUTPUT_SOURCE_TYPE[bus.busType];
-    const slotCount = bus.format === ChannelFormat.MONO ? 1 : 2;
-    for (let n = 0; n < slotCount; n++) {
-      const idx = bus.physicalOutput.index + n;
-      messages.push({ address: IoOutput.sourceType(outGroupCode, idx), args: [s(sourceType)] });
-      messages.push({ address: IoOutput.sourceNumber(outGroupCode, idx), args: [i(bus.busNumber)] });
-      messages.push({ address: IoOutput.name(outGroupCode, idx), args: [s(truncateName(bus.name))] });
-      messages.push({ address: IoOutput.color(outGroupCode, idx), args: [i(colorForBusName(bus.name))] });
-    }
+  // /in = le NUMÉRO de ce bus/main/matrix). L et R sont CONFIRMÉS indépendants : chacun peut viser un
+  // port différent (pas forcément adjacent) — voir bus.physicalOutput.l / .r, chacun optionnel.
+  const sourceType = OUTPUT_SOURCE_TYPE[bus.busType];
+  const outRefs = bus.format === ChannelFormat.MONO
+    ? [bus.physicalOutput?.l].filter(Boolean)
+    : [bus.physicalOutput?.l, bus.physicalOutput?.r].filter(Boolean);
+  for (const ref of outRefs) {
+    const outGroupCode = WING_OUTPUT_GROUPS[ref.group].oscCode;
+    messages.push({ address: IoOutput.sourceType(outGroupCode, ref.index), args: [s(sourceType)] });
+    messages.push({ address: IoOutput.sourceNumber(outGroupCode, ref.index), args: [i(bus.busNumber)] });
+    messages.push({ address: IoOutput.name(outGroupCode, ref.index), args: [s(truncateName(bus.name))] });
+    messages.push({ address: IoOutput.color(outGroupCode, ref.index), args: [i(colorForBusName(bus.name))] });
   }
 
   messages.push({ address: nameAddr, args: [s(truncateName(bus.name))] });
