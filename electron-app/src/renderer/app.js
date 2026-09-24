@@ -76,7 +76,7 @@ function render() {
 
 function renderSidebarSummary() {
   const plan = state.plan;
-  const inputsUsed = plan.inputPlan.reduce((sum, i) => sum + i.slotCount, 0);
+  const inputsUsed = plan.inputPlan.length; // 1 slot de canal par source, même stéréo (voir allocator.js)
   const busUsed = plan.busPlan.length;
   const errorCount = plan.errors.length;
 
@@ -279,7 +279,7 @@ function categorySelect(pc) {
 function renderPlanTables() {
   const plan = state.plan;
   const inputRows = plan.inputPlan.map((i) => `
-    <tr><td>${i.firstSlot}</td><td>${i.slotCount}</td><td>${esc(i.patchLabel)}</td></tr>
+    <tr><td>${i.firstSlot}</td><td>${i.format}</td><td>${esc(i.patchLabel)}</td></tr>
   `).join('') || '<tr><td colspan="3" class="empty-hint">Aucune entrée</td></tr>';
 
   const busRows = plan.busPlan.map((b) => `
@@ -294,7 +294,7 @@ function renderPlanTables() {
     <div style="display:flex; gap:20px;">
       <div style="flex:1;">
         <table class="data">
-          <thead><tr><th>Slot</th><th>Nb</th><th>Patch</th></tr></thead>
+          <thead><tr><th>Canal</th><th>Format</th><th>Patch</th></tr></thead>
           <tbody>${inputRows}</tbody>
         </table>
       </div>
@@ -409,7 +409,7 @@ function getInputPatchItems() {
     items.push({
       key: `input:${src.id}`,
       label: input.displayName,
-      stereo: input.slotCount > 1,
+      stereo: input.format === M.ChannelFormat.STEREO,
       getRef: () => src.physicalInput,
       setRef: (ref) => { src.physicalInput = ref; },
     });

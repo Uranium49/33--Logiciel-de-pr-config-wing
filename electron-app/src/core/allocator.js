@@ -55,38 +55,44 @@ function computeAutomixAssignments(config, capacity, result) {
 // Zones fixes demandées explicitement (WING_CAPACITY.inputZones) : mêmes emplacements d'une prod à
 // l'autre, même si une zone n'est pas remplie entièrement (l'espace inutilisé reste réservé, jamais
 // récupéré par la zone suivante).
-//   1-8   : casteurs (commentateurs) + ingé son + pistes de référence automix
+//   1-8   : casteurs (commentateurs) + pistes de référence automix
 //   9-32  : micros terrain ("ambiances")
 //   33-48 : sources PC (canaux 33-40 puis aux 1-8, contigus dans notre numérotation de slot)
+//   39    : réservé en dur — micro talkback de l'ingé son
+//   40    : réservé en dur — micro réel de référence
+//
+// IMPORTANT — canaux Wing NATIVEMENT stéréo (spec officielle : "40 Stereo Input Channels") : contrairement
+// à un X32 où une source stéréo occupe 2 canaux mono adjacents, UN SEUL canal Wing suffit pour une
+// source stéréo. Le canal patche sur le PREMIER port physique d'une paire liée en stéréo
+// (/io/in/{grp}/{idx}/mode = "ST", voir scenePlanner.js) et reçoit L+R automatiquement. Chaque
+// source ne consomme donc jamais plus d'UN slot de canal, quel que soit son format ; seul le PATCH
+// PHYSIQUE (2 ports d'entrée) dépend du format mono/stéréo.
+
+const RESERVED_SLOTS = { engineerTalk: 39, referenceMic: 40 };
 
 function allocateInputs(config, capacity, result, automixByLangId) {
   const zones = capacity.inputZones;
 
   let casterCursor = zones.casters.start;
-  const placeCaster = (sourceName, displayName, physicalInput, kind, automixGroup = null) => {
+  const placeCaster = (sourceName, displayName, physicalInput, kind, format, automixGroup = null) => {
     if (casterCursor > zones.casters.end) {
       result.errors.push({
         resource: 'Zone casteurs',
         requested: casterCursor - zones.casters.start,
         available: zones.casters.end - zones.casters.start + 1,
         detail: `Trop d'éléments pour la zone casteurs (canaux ${zones.casters.start}-${zones.casters.end}) : ` +
-          `"${displayName}" n'a pas pu être placé. Réduis le nombre de commentateurs, désactive l'ingé son, ou limite l'automix.`,
+          `"${displayName}" n'a pas pu être placé. Réduis le nombre de commentateurs ou limite l'automix.`,
       });
       return;
     }
-    casterCursor = placeInput(result, sourceName, displayName, 1, casterCursor, physicalInput, kind, automixGroup);
+    casterCursor = placeInput(result, sourceName, displayName, casterCursor, physicalInput, kind, format, automixGroup);
   };
 
   for (const lang of config.languages) {
     const automixGroup = automixByLangId.get(lang.id) || null;
     for (const c of lang.commentators) {
-      placeCaster(c.name, `${c.name} (${lang.name})`, c.physicalInput, 'commentator', automixGroup);
+      placeCaster(c.name, `${c.name} (${lang.name})`, c.physicalInput, 'commentator', ChannelFormat.MONO, automixGroup);
     }
-  }
-
-  if (config.soundEngineerEnabled) {
-    const eng = config.soundEngineer;
-    placeCaster(eng.name, eng.name, eng.physicalInput, 'engineer');
   }
 
   // Une piste de référence par groupe d'automix réellement utilisé : oscillateur en bruit rose à
@@ -94,57 +100,59 @@ function allocateInputs(config, capacity, result, automixByLangId) {
   const usedAutomixGroups = [...new Set(automixByLangId.values())].sort();
   for (const groupNum of usedAutomixGroups) {
     const name = `AMX Ref ${groupNum}`; // court exprès : la scribble strip tronque au-delà de 12 car.
-    placeCaster(name, name, createPhysicalRef(WingIoGroup.OSCILLATOR, 1), 'automixRef', groupNum);
+    placeCaster(name, name, createPhysicalRef(WingIoGroup.OSCILLATOR, 1), 'automixRef', ChannelFormat.MONO, groupNum);
   }
 
   let ambianceCursor = zones.ambiances.start;
   for (const mic of config.fieldMics) {
-    const slots = mic.format === ChannelFormat.STEREO ? 2 : 1;
-    if (ambianceCursor + slots - 1 > zones.ambiances.end) {
+    if (ambianceCursor > zones.ambiances.end) {
       result.errors.push({
         resource: 'Zone ambiances',
-        requested: ambianceCursor + slots - 1 - zones.ambiances.start + 1,
+        requested: ambianceCursor - zones.ambiances.start + 1,
         available: zones.ambiances.end - zones.ambiances.start + 1,
         detail: `Trop de micros terrain pour la zone ambiances (canaux ${zones.ambiances.start}-${zones.ambiances.end}) : ` +
           `"${mic.name}" n'a pas pu être placé.`,
       });
       continue;
     }
-    ambianceCursor = placeInput(result, mic.name, mic.name, slots, ambianceCursor, mic.physicalInput, 'fieldMic');
+    ambianceCursor = placeInput(result, mic.name, mic.name, ambianceCursor, mic.physicalInput, 'fieldMic', mic.format);
   }
 
-  // Canal 40 réservé en dur pour le micro réel (patch fixe Local #24, position fixe) — demandé
-  // explicitement, en dehors de toute logique séquentielle. Rien d'autre ne doit atterrir dessus.
-  const REFERENCE_MIC_SLOT = 40;
-  placeInput(result, 'Mic Real', 'Mic Real', 1, REFERENCE_MIC_SLOT, createPhysicalRef(WingIoGroup.LOCAL, 24), 'referenceMic');
+  // Canal 40 réservé en dur pour le micro réel (patch fixe Local #24) et canal 39 pour le micro
+  // talkback de l'ingé son — demandé explicitement, en dehors de toute logique séquentielle.
+  placeInput(result, 'Mic Real', 'Mic Real', RESERVED_SLOTS.referenceMic, createPhysicalRef(WingIoGroup.LOCAL, 24), 'referenceMic', ChannelFormat.MONO);
+  if (config.soundEngineerEnabled) {
+    const eng = config.soundEngineer;
+    placeInput(result, eng.name, eng.name, RESERVED_SLOTS.engineerTalk, eng.physicalInput, 'engineer', ChannelFormat.MONO);
+  }
 
   let pcCursor = zones.pc.start;
   for (const pc of config.pcSources) {
-    const slots = pc.format === ChannelFormat.STEREO ? 2 : 1;
-    // Le slot 40 est réservé : si la prochaine source PC le chevauche, elle saute directement après.
-    if (pcCursor <= REFERENCE_MIC_SLOT && pcCursor + slots - 1 >= REFERENCE_MIC_SLOT) {
-      pcCursor = REFERENCE_MIC_SLOT + 1;
-    }
-    if (pcCursor + slots - 1 > zones.pc.end) {
+    // Les 2 canaux réservés (39, 40) sont sautés s'ils tombent sur le chemin.
+    if (pcCursor === RESERVED_SLOTS.engineerTalk || pcCursor === RESERVED_SLOTS.referenceMic) pcCursor += 1;
+    if (pcCursor === RESERVED_SLOTS.engineerTalk || pcCursor === RESERVED_SLOTS.referenceMic) pcCursor += 1;
+    if (pcCursor > zones.pc.end) {
       result.errors.push({
         resource: 'Zone PC',
-        requested: pcCursor + slots - 1 - zones.pc.start + 1,
-        available: zones.pc.end - zones.pc.start + 1 - 1, // -1 : canal 40 réservé au micro réel
-        detail: `Trop de sources PC pour la zone PC (canaux ${zones.pc.start}-40 + aux 1-8, canal 40 réservé) : ` +
+        requested: pcCursor - zones.pc.start + 1,
+        available: zones.pc.end - zones.pc.start + 1 - 2, // -2 : canaux 39 et 40 réservés
+        detail: `Trop de sources PC pour la zone PC (canaux ${zones.pc.start}-40 + aux 1-8, canaux 39 et 40 réservés) : ` +
           `"${pc.name}" n'a pas pu être placé.`,
       });
       continue;
     }
-    pcCursor = placeInput(result, pc.name, pc.name, slots, pcCursor, pc.physicalInput, 'pcSource');
+    pcCursor = placeInput(result, pc.name, pc.name, pcCursor, pc.physicalInput, 'pcSource', pc.format);
   }
 }
 
-function placeInput(result, sourceName, displayName, slots, cursor, physicalInput, kind, automixGroup = null) {
+/** Chaque source consomme exactement UN slot de canal/aux, quel que soit son format (voir note
+ * ci-dessus) — `format` ne sert qu'au patch physique (1 ou 2 ports d'entrée), pas au numéro de canal. */
+function placeInput(result, sourceName, displayName, cursor, physicalInput, kind, format, automixGroup = null) {
   result.inputPlan.push({
-    sourceName, firstSlot: cursor, slotCount: slots, displayName, patchLabel: displayName,
-    physicalInput: physicalInput || null, kind, automixGroup,
+    sourceName, firstSlot: cursor, displayName, patchLabel: displayName,
+    physicalInput: physicalInput || null, kind, format, automixGroup,
   });
-  return cursor + slots;
+  return cursor + 1;
 }
 
 // ---------- Bus ----------

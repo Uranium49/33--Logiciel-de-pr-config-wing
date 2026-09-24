@@ -68,69 +68,72 @@ function buildMessages(plan) {
   return messages;
 }
 
+// CONFIRMÉ : les canaux Wing sont NATIVEMENT stéréo (spec officielle "40 Stereo Input Channels") —
+// contrairement à un X32, une source stéréo n'a besoin que d'UN SEUL canal (voir allocator.js). Le
+// canal patche sur le PREMIER des 2 ports physiques liés en stéréo (/io/in/.../mode = "ST") et
+// reçoit L+R automatiquement. Donc : messages CANAL émis une seule fois (nom/couleur/icône/automix/
+// patch), messages PORT PHYSIQUE émis 1 ou 2 fois selon le format (mono/stéréo de la SOURCE).
 function addInputMessages(messages, input) {
   const style = CHANNEL_STYLE[input.kind] || {};
+  const isStereo = input.format === ChannelFormat.STEREO;
 
-  for (let n = 0; n < input.slotCount; n++) {
-    const slot = input.firstSlot + n;
-    const isAux = slot > 40;
-    const chOrAux = isAux ? slot - 40 : slot;
-    const addr = isAux ? AuxInput : Channel;
+  const slot = input.firstSlot;
+  const isAux = slot > 40;
+  const chOrAux = isAux ? slot - 40 : slot;
+  const addr = isAux ? AuxInput : Channel;
 
-    // Patcher l'entrée AVANT de nommer/colorer : certaines consoles réappliquent un nom "auto"
-    // basé sur la source dès qu'on change le patch, ce qui écraserait un nom envoyé avant.
-    let groupCode = null;
-    let sourceIndex = null;
-    if (input.physicalInput) {
-      groupCode = WING_INPUT_GROUPS[input.physicalInput.group].oscCode;
-      sourceIndex = input.physicalInput.index + n;
-      messages.push({ address: addr.inputConnectionGroup(chOrAux), args: [s(groupCode)] });
-      messages.push({ address: addr.inputConnectionIndex(chOrAux), args: [i(sourceIndex)] });
+  // Patcher l'entrée AVANT de nommer/colorer : certaines consoles réappliquent un nom "auto"
+  // basé sur la source dès qu'on change le patch, ce qui écraserait un nom envoyé avant. Le canal ne
+  // référence que le PREMIER port physique — c'est le lien stéréo côté port (mode=ST) qui lui
+  // apporte aussi le second canal, pas un second patch côté canal.
+  let groupCode = null;
+  if (input.physicalInput) {
+    groupCode = WING_INPUT_GROUPS[input.physicalInput.group].oscCode;
+    messages.push({ address: addr.inputConnectionGroup(chOrAux), args: [s(groupCode)] });
+    messages.push({ address: addr.inputConnectionIndex(chOrAux), args: [i(input.physicalInput.index)] });
+  }
+
+  const label = truncateName(input.sourceName);
+  messages.push({ address: addr.name(chOrAux), args: [s(label)] });
+  if (style.col != null) messages.push({ address: addr.color(chOrAux), args: [i(style.col)] });
+  if (style.icon != null) messages.push({ address: addr.icon(chOrAux), args: [i(style.icon)] });
+
+  // Automix : CONFIRMÉ — passe par le slot post-insert du channel (/postins/mode = "AUTO_X"/
+  // "AUTO_Y"), pas un paramètre dédié. Uniquement sur les 40 canaux principaux.
+  if (input.automixGroup && !isAux) {
+    messages.push({ address: Channel.postInsertMode(chOrAux), args: [s(AUTOMIX_POSTINS_MODE[input.automixGroup])] });
+    messages.push({ address: Channel.postInsertOn(chOrAux), args: [i(1)] });
+  }
+
+  // Piste de référence automix : fader à -10dB, ne sort dans AUCUN bus/main/matrix. On ne se
+  // contente pas de "ne rien envoyer" (un résidu de patch d'une précédente prod pourrait laisser
+  // cette piste active sur un ancien routage) : on COUPE explicitement tous les sends possibles.
+  if (input.kind === 'automixRef') {
+    messages.push({ address: addr.fader(chOrAux), args: [f(AUTOMIX_REF_LEVEL_DB)] });
+    for (let m = 1; m <= WING_CAPACITY.mainBuses; m++) {
+      messages.push({ address: addr.mainSendOn(chOrAux, m), args: [i(0)] });
     }
-
-    // sourceName (identité courte, ex. "FR-Comm1") plutôt que displayName (ex. "FR-Comm1 (FR)",
-    // réservé à l'UI) pour éviter une troncature disgracieuse sur la scribble strip.
-    const label = truncateName(input.slotCount > 1 ? `${input.sourceName} ${n === 0 ? 'L' : 'R'}` : input.sourceName);
-    messages.push({ address: addr.name(chOrAux), args: [s(label)] });
-    if (style.col != null) messages.push({ address: addr.color(chOrAux), args: [i(style.col)] });
-    if (style.icon != null) messages.push({ address: addr.icon(chOrAux), args: [i(style.icon)] });
-
-    // Automix : CONFIRMÉ — passe par le slot post-insert du channel (/postins/mode = "AUTO_X"/
-    // "AUTO_Y"), pas un paramètre dédié. Uniquement sur les 40 canaux principaux.
-    if (input.automixGroup && !isAux) {
-      messages.push({ address: Channel.postInsertMode(chOrAux), args: [s(AUTOMIX_POSTINS_MODE[input.automixGroup])] });
-      messages.push({ address: Channel.postInsertOn(chOrAux), args: [i(1)] });
+    for (let b = 1; b <= WING_CAPACITY.buses; b++) {
+      messages.push({ address: addr.sendOn(chOrAux, b), args: [i(0)] });
     }
-
-    // Piste de référence automix : fader à -10dB, ne sort dans AUCUN bus/main/matrix. On ne se
-    // contente pas de "ne rien envoyer" (un résidu de patch d'une précédente prod pourrait laisser
-    // cette piste active sur un ancien routage) : on COUPE explicitement tous les sends possibles.
-    if (input.kind === 'automixRef') {
-      messages.push({ address: addr.fader(chOrAux), args: [f(AUTOMIX_REF_LEVEL_DB)] });
-      for (let m = 1; m <= WING_CAPACITY.mainBuses; m++) {
-        messages.push({ address: addr.mainSendOn(chOrAux, m), args: [i(0)] });
-      }
-      for (let b = 1; b <= WING_CAPACITY.buses; b++) {
-        messages.push({ address: addr.sendOn(chOrAux, b), args: [i(0)] });
-      }
-      for (let mx = 1; mx <= WING_CAPACITY.matrixBuses; mx++) {
-        messages.push({ address: addr.matrixSendOn(chOrAux, mx), args: [i(0)] });
-      }
+    for (let mx = 1; mx <= WING_CAPACITY.matrixBuses; mx++) {
+      messages.push({ address: addr.matrixSendOn(chOrAux, mx), args: [i(0)] });
     }
+  }
 
-    // Nomme/colore AUSSI la source physique elle-même (pas seulement le channel) — CONFIRMÉ par
-    // observation directe sur une Wing réelle : /io/in/LCL/8/col et /io/in/LCL/8/icon s'affichent
-    // en écho quand le channel patché sur ce port est modifié. /name suit la même logique par
-    // symétrie avec col/icon.
-    if (groupCode) {
-      messages.push({ address: IoInput.name(groupCode, sourceIndex), args: [s(label)] });
-      if (style.col != null) messages.push({ address: IoInput.color(groupCode, sourceIndex), args: [i(style.col)] });
-      if (style.icon != null) messages.push({ address: IoInput.icon(groupCode, sourceIndex), args: [i(style.icon)] });
-
-      // CONFIRMÉ : sans ce paramètre de mode explicite, une paire patchée sur 2 index consécutifs
-      // reste en MONO côté console. Émis pour chaque membre de la paire (les deux reçoivent la
-      // même valeur, comme observé).
-      messages.push({ address: IoInput.mode(groupCode, sourceIndex), args: [s(input.slotCount > 1 ? 'ST' : 'M')] });
+  // Ports physiques : nomme/colore AUSSI la source physique elle-même (pas seulement le channel) —
+  // CONFIRMÉ par observation directe : /io/in/LCL/8/col et /io/in/LCL/8/icon s'affichent en écho
+  // quand le channel patché sur ce port est modifié. Sur 1 port (mono) ou 2 (stéréo, L puis R) :
+  // sans le paramètre "mode" explicite sur CHAQUE port, une paire reste en MONO côté console.
+  if (groupCode) {
+    const portCount = isStereo ? 2 : 1;
+    for (let p = 0; p < portCount; p++) {
+      const idx = input.physicalInput.index + p;
+      const portLabel = truncateName(isStereo ? `${input.sourceName} ${p === 0 ? 'L' : 'R'}` : input.sourceName);
+      messages.push({ address: IoInput.name(groupCode, idx), args: [s(portLabel)] });
+      if (style.col != null) messages.push({ address: IoInput.color(groupCode, idx), args: [i(style.col)] });
+      if (style.icon != null) messages.push({ address: IoInput.icon(groupCode, idx), args: [i(style.icon)] });
+      messages.push({ address: IoInput.mode(groupCode, idx), args: [s(isStereo ? 'ST' : 'M')] });
     }
   }
 }
@@ -188,11 +191,10 @@ function addProgramSends(messages, bus, inputBySourceName) {
   for (const sourceName of bus.sends) {
     const input = inputBySourceName.get(sourceName);
     if (!input) continue;
-    for (let n = 0; n < input.slotCount; n++) {
-      const { onAddr, levelAddr } = resolveChannelSendAddresses(input.firstSlot + n, bus);
-      messages.push({ address: onAddr, args: [i(1)] });
-      messages.push({ address: levelAddr, args: [f(0.0)] });
-    }
+    // Un seul canal par source, même stéréo (voir addInputMessages) — un seul send, pas un par port.
+    const { onAddr, levelAddr } = resolveChannelSendAddresses(input.firstSlot, bus);
+    messages.push({ address: onAddr, args: [i(1)] });
+    messages.push({ address: levelAddr, args: [f(0.0)] });
   }
 }
 
@@ -265,11 +267,9 @@ function addTalkbackMeshMessages(messages, plan, inputBySourceName) {
     for (const speaker of speakers) {
       const input = inputBySourceName.get(speaker);
       if (!input) continue;
-      for (let n = 0; n < input.slotCount; n++) {
-        const { onAddr, levelAddr } = resolveChannelSendAddresses(input.firstSlot + n, bus);
-        messages.push({ address: onAddr, args: [i(0)] });
-        messages.push({ address: levelAddr, args: [f(0.0)] });
-      }
+      const { onAddr, levelAddr } = resolveChannelSendAddresses(input.firstSlot, bus);
+      messages.push({ address: onAddr, args: [i(0)] });
+      messages.push({ address: levelAddr, args: [f(0.0)] });
     }
   }
 }

@@ -42,7 +42,7 @@ function buildPatchCsvText(plan) {
     const patch = input.physicalInput
       ? `${WING_INPUT_GROUPS[input.physicalInput.group].label} #${input.physicalInput.index}`
       : '(non patché)';
-    lines.push(`Entrée;${addressHint};${csv(input.patchLabel)};${input.slotCount} slot(s);;;${csv(patch)}`);
+    lines.push(`Entrée;${addressHint};${csv(input.patchLabel)};${input.format};;;${csv(patch)}`);
   }
 
   for (const bus of plan.busPlan) {
