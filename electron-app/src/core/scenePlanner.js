@@ -146,17 +146,24 @@ function addBusMessages(messages, bus) {
 
   // Patch de sortie AVANT le nommage (même raisonnement que pour les entrées, voir addInputMessages).
   // CONFIRMÉ par observation directe : l'architecture est INVERSÉE par rapport à l'entrée — c'est le
-  // PORT PHYSIQUE de sortie qui choisit sa source (/io/out/{grp}/{idx}/grp = "MAIN"/"BUS"/"MTX",
-  // /in = le NUMÉRO de ce bus/main/matrix). L et R sont CONFIRMÉS indépendants : chacun peut viser un
-  // port différent (pas forcément adjacent) — voir bus.physicalOutput.l / .r, chacun optionnel.
+  // PORT PHYSIQUE de sortie qui choisit sa source (/io/out/{grp}/{idx}/grp = "MAIN"/"BUS"/"MTX").
+  // CONFIRMÉ aussi : /in n'est PAS le numéro du bus stéréo (1-16) mais un index MONO — "les bus sont
+  // notés de 1 à 32" (16 bus stéréo x 2 canaux). Un port physique de sortie est intrinsèquement mono
+  // (une paire de broches XLR/AES = un seul canal audio), donc il lui faut désigner PRÉCISÉMENT quel
+  // canal (L ou R) d'un bus stéréo il reçoit — pas juste "le bus". Sans ça, envoyer le même numéro de
+  // bus pour L et R revenait toujours à désigner son canal L (bug rapporté : "toujours L même pour R").
+  // Formule : canal L d'un bus N -> (N-1)*2+1, canal R -> (N-1)*2+2. Appliquée uniformément aux 3
+  // types (Bus confirmé ; Main/Matrix par cohérence, non vérifiés séparément).
   const sourceType = OUTPUT_SOURCE_TYPE[bus.busType];
+  const monoIndexFor = (channel) => (bus.busNumber - 1) * 2 + (channel === 'r' ? 2 : 1);
   const outRefs = bus.format === ChannelFormat.MONO
-    ? [bus.physicalOutput?.l].filter(Boolean)
-    : [bus.physicalOutput?.l, bus.physicalOutput?.r].filter(Boolean);
-  for (const ref of outRefs) {
+    ? [{ ref: bus.physicalOutput?.l, monoIndex: monoIndexFor('l') }]
+    : [{ ref: bus.physicalOutput?.l, monoIndex: monoIndexFor('l') }, { ref: bus.physicalOutput?.r, monoIndex: monoIndexFor('r') }];
+  for (const { ref, monoIndex } of outRefs) {
+    if (!ref) continue;
     const outGroupCode = WING_OUTPUT_GROUPS[ref.group].oscCode;
     messages.push({ address: IoOutput.sourceType(outGroupCode, ref.index), args: [s(sourceType)] });
-    messages.push({ address: IoOutput.sourceNumber(outGroupCode, ref.index), args: [i(bus.busNumber)] });
+    messages.push({ address: IoOutput.sourceNumber(outGroupCode, ref.index), args: [i(monoIndex)] });
     messages.push({ address: IoOutput.name(outGroupCode, ref.index), args: [s(truncateName(bus.name))] });
     messages.push({ address: IoOutput.color(outGroupCode, ref.index), args: [i(colorForBusName(bus.name))] });
   }
